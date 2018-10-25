@@ -46,8 +46,7 @@ class JSWrapper():
       expr = self.fix(expr)
     pre_js = 'value_elem = ' + ('elem; ' if not expr else f'document.evaluate("{expr}", elem, null, XPathResult.ANY_TYPE, null).iterateNext(); ')
     js = pre_js + f'result = "Element not found"; if (value_elem) {{ xpath_result = document.evaluate("string()", value_elem, null, XPathResult.ANY_TYPE, null); if (xpath_result) {{ result = xpath_result.stringValue; }}; }}; result;'
-    return js
-    
+    return js  
   
   def by_id(self, id):
     return JSWrapper(self, f'elem=document.getElementById("{id}");')
@@ -125,7 +124,8 @@ class JSWrapper():
   def abs_style(self, style_attribute):
     value = JSWrapper(self, f'window.getComputedStyle(elem).{style_attribute};').evaluate()
     try:
-      return float(value.strip('px'))
+      value = float(value.strip('px'))
+      return value
     except ValueError:
       return value
     
@@ -166,7 +166,6 @@ class JSWrapper():
     callback_id = self.target_webview.delegate.set_callback(func)
     delay_ms = delay * 1000
     js = f'setTimeout(function(){{ window.location.href = "{self.target_webview.delegate.callback_prefix}{callback_id}"; }}, {delay_ms});'
-    print(js)
     JSWrapper(self, js).evaluate()
     
   def evaluate(self):

@@ -1,5 +1,5 @@
 #coding: utf-8
-from youey.util.prop import prop
+from youey.util.prop import prop, jsprop
 
 class StyleProperties():
   
@@ -8,26 +8,32 @@ class StyleProperties():
       return color
     if type(color) == tuple and len(color) >= 3:
       alpha = color[3] if len(color) == 4 else 1.0
-      if all((component >= 1.0) for component in color):
+      if all((component <= 1.0) for component in color):
         color_rgb = [int(component*255) for component in color[:3]]
         color_rgb.append(color[3] if len(color) == 4 else 1.0)
         color = tuple(color_rgb)
       return f'rgba{str(color)}'
+      
+  def from_css_color(self, css_color_str):
+    segments = css_color_str[:-1].split('(')
+    components = [float(c) for c in segments[1].split(',')]
+    if len(components) == 3:
+      components.append(1.0)
+    return components
 
-  @prop
-  def background_color(self, *args, base_prop):
+  @jsprop
+  def background_color(self, *args, js_prop):
     if args:
-      self._inner.set_style('backgroundColor', self.to_css_color(args[0]))
+      self._inner.set_style(js_prop, self.to_css_color(args[0]))
     else:
-      return self._inner.abs_style('backgroundColor')
-
-  @property
-  def background_image(self):
-    return self.js().style('backgroundImage')
-    
-  @background_image.setter
-  def background_image(self, value):
-    self.js().set_style('backgroundImage', self.to_css_color(value))
+      return self.from_css_color(self._inner.abs_style(js_prop))
+      
+  @jsprop
+  def background_image(self, *args, js_prop):
+    if args:
+      self.js().set_style(js_prop, args[0])
+    else:
+      return self.js().abs_style(js_prop)
 
   @property
   def font(self):
@@ -55,6 +61,7 @@ class StyleProperties():
     
   @property
   def font_bold(self):
+    "Set to True to display bold text."
     value = self.js().style('fontWeight')
     return value == 'bold'
     
@@ -76,13 +83,13 @@ class StyleProperties():
 
   @property
   def text_color(self):
-    value = self.js().style('color')
+    value = self._inner.abs_style('color')
     return value
     
   @text_color.setter
   def text_color(self, value):
     value = self.to_css_color(value)
-    self.js().set_style('color', value)
+    self._inner.set_style('color', value)
 
   @property
   def visible(self):

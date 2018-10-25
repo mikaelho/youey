@@ -1,6 +1,6 @@
 #coding: utf-8
 '''
-Foundational view object and the derived app view.
+Foundational view object.
 '''
 
 # Support script-local testing
@@ -10,25 +10,26 @@ rootDir = os.path.abspath(os.path.join(currDir, '..'))
 if rootDir not in sys.path: 
   sys.path.insert(0, rootDir)
 
-import uuid, re
-from youey.util.prop import prop
+import re
+from youey.util.prop import *
 from youey.jswrapper import JSWrapper
-from youey.webview import WebView
-from youey.layout import LayoutProperties
+from youey.layout import *
 from youey.style import StyleProperties
+from youey.theme import *
 #import layoutproperties
 #import styleproperties
 
 class View(JSWrapper, LayoutProperties, StyleProperties):
+
+  default_theme = LightTheme
 
   def __init__(self, parent, name=None, **kwargs):
     self.parent = parent
     self.root = parent.root
     self.id = type(self).__name__
     
-    for key in kwargs:
-      getattr(self, key)
-      setattr(self, key, kwargs[key])
+    theme = kwargs.pop('theme', None)
+    theme = theme or self.default_theme
         
     self.children = []
     self._anchors = {}
@@ -39,19 +40,36 @@ class View(JSWrapper, LayoutProperties, StyleProperties):
     self._js = JSWrapper(self.root.webview).by_id(self.id)
     self._inner = JSWrapper(self.root.webview).by_id(self.id_inner)
     
-    self.margin = 0
-    self.background_color = 'green'
+    self.theme = theme
+    self.apply_theme()
+    
+    for key in kwargs:
+      getattr(self, key)
+      setattr(self, key, kwargs[key])
+    
+  def apply_theme(self):
+    t = self.theme
+    self.background_color = t.background_color
+    self.margin = t.margin
     
   def render(self):
-    return f'<div id=\'{self.id}\' style=\'position: absolute; top: 0; left: 0; width: 300px; height: 300px;\'><div id=\'{self.id_inner}\' style=\'position: absolute; overflow: hidden; text-overflow: ellipsis;\'></div></div>'
+    return f'<div id=\'{self.id}\' style=\'position: absolute;\'><div id=\'{self.id_inner}\' style=\'position: absolute; overflow: hidden; text-overflow: ellipsis;\'></div></div>'
     
     #self.style()
+    
+  def _update_dependencies(self):
+    self.root._update_dependencies(self)
+    
+  def _refresh_anchors(self):
+    for prop in self._anchors:
+      self._refresh(prop)
+    self._update_dependencies()
     
   @prop
   def id(self, *args, base_prop):
     if args:
-      if hasattr(self, '_id') and self._id in self.root:
-        del self.root[self._id]
+      if hasattr(self, '_id') and self._id in self.root.views:
+        del self.root.views[self._id]
       id = args[0]
       id = str(id)
       if not len(id) > 0:
@@ -60,11 +78,11 @@ class View(JSWrapper, LayoutProperties, StyleProperties):
       id = re.sub(r"\s+", '-', id)
       candidate = id
       count = 1
-      while candidate in self.root:
+      while candidate in self.root.views:
         candidate = id + '-' + str(count)
         count += 1
       self._id = candidate
-      self.root[self._id] = self
+      self.root.views[self._id] = self
     else:
       return getattr(self, base_prop, None)
       
@@ -84,45 +102,7 @@ class View(JSWrapper, LayoutProperties, StyleProperties):
       setattr(self, base_prop, args[0])
     else:
       return getattr(self, base_prop, None)
-  
-  
-class Label(View):
-  
-  @prop
-  def text(self, *args, base_prop):
-    if args:
-      setattr(self, base_prop, args[0])
-    else:
-      return getattr(self, base_prop, None)
-  
-  
-class App(View, dict):
-  def __init__(self, webview=None, present=True):
-    self.webview = webview or WebView()
-    with open('youey/main-ui.html', 'r', encoding='utf-8') as main_html:
-      self.webview.load_html(main_html.read())
-    self.root = self
-    self['test'] = 'best'
-    self._all_views_by_id = {}
-    super().__init__(self) # self as parent
-    
-    while not self.webview.loaded:
-      time.sleep(0.01)
-    if present:
-      self.present()
-    
-  def present(self):
-    "Make the app visible, i.e. present the main app window."
-    self.webview.create_window()
-    
-  def _add_child_for(self, child, parent):
-    if parent is child: return
-    if child not in parent.children:
-      parent.children.append(child)
-    js = JSWrapper(self.webview)
-    parent_elem = js.xpath('body') if parent is self else js.by_id(parent.id)
-    parent_elem.append(child.render())
-    
+      
     
 class MockWebView():
   
