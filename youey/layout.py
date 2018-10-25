@@ -1,18 +1,6 @@
 #coding: utf-8
-from youey.util.prop import prop
-
-LEFT = 'left'
-X = 'x'
-RIGHT = 'right'
-WIDTH = 'width'
-INNER_WIDTH = 'inner_width'
-CENTER = 'center'
-TOP = 'top'
-Y = 'y'
-BOTTOM = 'bottom'
-HEIGHT = 'height'
-INNER_HEIGHT = 'inner_height'
-MIDDLE = 'middle'
+from youey.util.prop import *
+from youey.constants import *
 
 def _get(obj, name):
   prop = _prop(obj, name)
@@ -28,12 +16,16 @@ def _prop(obj, name):
     X: type(obj).x,
     RIGHT: type(obj).right,
     WIDTH: type(obj).width,
+    MAX_WIDTH: type(obj).max_width,
+    MIN_WIDTH: type(obj).min_width,
     INNER_WIDTH: type(obj).inner_width,
     CENTER: type(obj).center,
     TOP: type(obj).top,
     Y: type(obj).y,
     BOTTOM: type(obj).bottom,
     HEIGHT: type(obj).height,
+    MAX_HEIGHT: type(obj).max_height,
+    MIN_HEIGHT: type(obj).min_height,
     INNER_HEIGHT: type(obj).inner_height,
     MIDDLE: type(obj).middle
   }
@@ -69,9 +61,23 @@ class PublicLayoutProperties():
   def width(self, value):
     self._setr(WIDTH, value)
     
+  @prop
+  def max_width(self, *args, base_prop):
+    if args:
+      self._setr(MAX_WIDTH, args[0])
+    else:
+      return self._getr(MAX_WIDTH)
+      
+  @prop
+  def min_width(self, *args, base_prop):
+    if args:
+      self._setr(MIN_WIDTH, args[0])
+    else:
+      return self._getr(MIN_WIDTH)
+    
   @property
   def inner_width(self):
-    return self._getr(WIDTH, inner=True)
+    return self._getr(WIDTH) #, inner=True)
     
   @property
   def height(self):
@@ -81,9 +87,23 @@ class PublicLayoutProperties():
   def height(self, value):
     self._setr(HEIGHT, value)
     
+  @prop
+  def max_height(self, *args, base_prop):
+    if args:
+      self._setr(MAX_HEIGHT, args[0])
+    else:
+      return self._getr(MAX_HEIGHT)
+      
+  @prop
+  def min_height(self, *args, base_prop):
+    if args:
+      self._setr(MIN_HEIGHT, args[0])
+    else:
+      return self._getr(MIN_HEIGHT)
+    
   @property
   def inner_height(self):
-    return self._getr(HEIGHT, inner=True)
+    return self._getr(HEIGHT) #, inner=True)
     
   @property
   def right(self):
@@ -141,6 +161,8 @@ class PublicLayoutProperties():
     else:
       return (self.width, self.height)
     
+    
+  '''
   @prop
   def margin_left(self, *args, base_prop):
     if args:
@@ -168,15 +190,26 @@ class PublicLayoutProperties():
       self._inner.set_style('bottom', args[0])
     else:
       return self._inner.abs_style('bottom')
+  '''
 
   @prop
   def margin(self, *args, base_prop):
-    if args:
-      "Insets to be applied to flexible layout values. 1-4 pixel values (or percentages?)."
-  
+    if args:  
       self.margin_top, self.margin_right, self.margin_bottom, self.margin_left = self._parse_multiple_edges(args[0])
+      js = f'{self.margin_top}px {self.margin_right}px {self.margin_bottom}px {self.margin_left}px'
+      self._js.set_style('margin', js)
     else:
       return (self.margin_top, self.margin_right, self.margin_bottom, self.margin_left)
+
+  @property
+  def padding(self):
+    return (self.padding_top, self.padding_right, self.padding_bottom, self.padding_left)
+    
+  @padding.setter
+  def padding(self, value):
+    self.padding_top, self.padding_right, self.padding_bottom, self.padding_left = self._parse_multiple_edges(value)
+    js = f'{self.padding_top}px {self.padding_right}px {self.padding_bottom}px {self.padding_left}px'
+    self._js.set_style('padding', js)
 
   def _parse_multiple_edges(self, value):
     if type(value) in [int, float]:
@@ -191,29 +224,90 @@ class PublicLayoutProperties():
       elif len(value) == 4:
         values = value
     return values
+    
+  @prop
+  def scrollable(self, *args, base_prop):
+    if args:
+      value = args[0]
+      if value:
+        self._js.set_style('-webkit-overflow-scrolling', 'touch')
+      if not value:
+        self._js.set_style('overflow', 'hidden')
+      elif value == HORIZONTAL:
+        self._js.set_style('overflowY', 'hidden')
+        self._js.set_style('overflowX', 'auto')
+      elif value == VERTICAL:
+        self._js.set_style('overflowX', 'hidden')
+        self._js.set_style('overflowY', 'auto')
+      elif value == True:
+        self._js.set_style('overflow', 'auto')
+      else:
+        raise ValueError('Unknown value for scrollable: ' + str(value))
+      setattr(self, base_prop, value)
+    else:
+      return getattr(self, base_prop, None)
 
 class Refresh():
   "When used to set a property value, instead refreshes from the anchor value."
   
-class LayoutProperties(PublicLayoutProperties):
+class LayoutMacros():
+  
+  def dock_all(self):
+    self.left = self.top = self.right = self.bottom = 0
+    return self
+  
+  def dock_left(self):
+    self.left = self.top = self.bottom = 0
+    return self
+  
+  def dock_top(self):
+    self.left = self.top = self.right = 0
+    return self
+    
+  def dock_right(self):
+    self.top = self.right = self.bottom = 0
+    return self
+    
+  def dock_bottom(self):
+    self.left = self.bottom = self.right = 0
+    return self
+    
+  def dock_sides(self):
+    self.left = self.right = 0
+    return self
+    
+  def dock_top_and_bottom(self):
+    self.top = self.bottom = 0
+    return self
+    
+  def dock_center(self):
+    self.center = Center(self.parent)
+    self.middle = Middle(self.parent)
+    return self
+
+  
+class LayoutHelpers():
   
   def _getr(self, prop, prop2=None, inner=False):
     elem = self._inner if inner else self._js
+    prop = to_camel_case(prop)
     value = elem.abs_style(prop)
     if prop2:
+      prop2 = to_camel_case(prop2)
       value2 = elem.abs_style(prop2)
       value = value + value2/2
     return value
     
   def _setr(self, prop, value, reverse_prop=None, inner=False):
+    original_intent = value
     if reverse_prop and isinstance(value, At):
       value.receiver = (self, reverse_prop)
     value = self._set_anchor(prop, value)
     if value is None:
       value = 'auto'
-    elem = self._inner if inner else self._js
-    elem.set_style(prop, value)
-    if value is not Refresh:
+    prop = to_camel_case(prop)
+    self._js.set_style(prop, value)
+    if original_intent is not Refresh:
       self.root._update_dependencies(self)
   
   def _set_anchor(self, prop, value):
@@ -238,6 +332,9 @@ class LayoutProperties(PublicLayoutProperties):
   def _refresh(self, dep_prop):
     _set(self, dep_prop, Refresh)
     
+    
+class LayoutProperties(PublicLayoutProperties, LayoutMacros, LayoutHelpers):
+  pass
     
 class At():
   
@@ -296,6 +393,13 @@ class Width(NotCoordinateValue):
 class Height(NotCoordinateValue):
   def __init__(self, ref, multiplier=None, offset=0):
     super().__init__(ref, HEIGHT, multiplier, offset)
+    
+class Center(Width):
+  def __init__(self, ref, offset=0):
+    super().__init__(ref, multiplier=0.5, offset=offset)
+class Middle(Height):
+  def __init__(self, ref, offset=0):
+    super().__init__(ref, multiplier=0.5, offset=offset)
 
 class InnerWidth(NotCoordinateValue):
   def __init__(self, ref, multiplier=None, offset=0):

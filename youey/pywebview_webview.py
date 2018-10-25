@@ -1,19 +1,19 @@
 #coding: utf-8
-from .util.inheritable import WebView as InheritableWebView
-from .shared_webview import WebViewShared
 from .jswrapper import JSWrapper
-import ui
-import json
-from urllib.parse import quote, unquote
+from .shared_webview import WebViewShared
+import webview # pywebview
+import threading, functools
 
-class WebView(InheritableWebView, WebViewShared):
+class WebView(WebViewShared):
   
-  event_prefix = 'youey-event:'
-  callback_code = 'window.location.href="youey-event:" + encodeURIComponent(JSON.stringify(package));'
+  callback_code = 'window.pywebview.api.event(package);'
   
   def __init__(self, app):
-    self.background_color = app.default_theme.background.hex
     self.app = app
+    runner = functools.partial(webview.create_window, )
+    
+    self.background_color = app.default_theme.background.hex
+
     self.delegate = self
     self.loaded = False
     self.scales_page_to_fit = False
@@ -29,17 +29,19 @@ class WebView(InheritableWebView, WebViewShared):
   #self.loaded = True
     
   def webview_should_start_load(self, webview, url, nav_type):
-    '''
     if url.startswith('youey-log:'):
       debug_info = json.loads(unquote(url[10:]))
       raise Exception('JavaScript error:\n' + json.dumps(debug_info, indent=2))
       return False
-    '''
-    if url.startswith(self.event_prefix):
+    elif url.startswith(self.event_prefix):
       event_info = json.loads(unquote(url[len(self.event_prefix):]))
-      self.handle_event_callback(event_info)
+      if event_info['event'] == 'resize':
+        self.resize_handler()
+      elif event_info['event'] == 'loaded':
+        self.loaded = True
       return False
     return True
+    
 
 if __name__ == '__main__':
   pass

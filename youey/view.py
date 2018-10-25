@@ -19,9 +19,17 @@ from youey.theme import *
 #import layoutproperties
 #import styleproperties
 
-class View(JSWrapper, LayoutProperties, StyleProperties):
+class AbstractView():
+  
+  def setup(self):
+    pass
+    
+  def apply_theme(self):
+    pass
 
-  default_theme = LightTheme
+class View(AbstractView, JSWrapper, LayoutProperties, StyleProperties):
+
+  default_theme = default_theme
 
   def __init__(self, parent, name=None, **kwargs):
     self.parent = parent
@@ -38,24 +46,20 @@ class View(JSWrapper, LayoutProperties, StyleProperties):
     parent.add_child(self)
     
     self._js = JSWrapper(self.root.webview).by_id(self.id)
-    self._inner = JSWrapper(self.root.webview).by_id(self.id_inner)
+    
+    super().setup()
+    self.setup()
     
     self.theme = theme
+    super().apply_theme()
     self.apply_theme()
     
     for key in kwargs:
       getattr(self, key)
       setattr(self, key, kwargs[key])
     
-  def apply_theme(self):
-    t = self.theme
-    self.background_color = t.background_color
-    self.margin = t.margin
-    
   def render(self):
-    return f'<div id=\'{self.id}\' style=\'position: absolute;\'><div id=\'{self.id_inner}\' style=\'position: absolute; overflow: hidden; text-overflow: ellipsis;\'></div></div>'
-    
-    #self.style()
+    return f'<div id=\'{self.id}\' style=\'position: absolute; box-sizing: border-box; overflow: hidden; text-overflow: ellipsis;\'></div>'
     
   def _update_dependencies(self):
     self.root._update_dependencies(self)
@@ -85,11 +89,7 @@ class View(JSWrapper, LayoutProperties, StyleProperties):
       self.root.views[self._id] = self
     else:
       return getattr(self, base_prop, None)
-      
-  @property
-  def id_inner(self):
-    return self._id + '-inner'
-    
+
   def add_child(self, child):
     return self.root._add_child_for(child, self)
     
@@ -102,11 +102,7 @@ class View(JSWrapper, LayoutProperties, StyleProperties):
       setattr(self, base_prop, args[0])
     else:
       return getattr(self, base_prop, None)
-      
-    
-class MockWebView():
-  
-  pass
+
 
 if __name__ == '__main__': 
   r = App(MockWebView())
