@@ -85,7 +85,7 @@ if webview_provider == 'Pythonista':
     event_prefix = 'youey-event:'
     callback_code = 'window.location.href="youey-event:" + encodeURIComponent(JSON.stringify(package));'
     
-    def open_webview(self, html):
+    def open_webview(self, title, html):
       wv = self.webview = ui.WebView()
       
       wv.background_color = self.default_theme.background.hex

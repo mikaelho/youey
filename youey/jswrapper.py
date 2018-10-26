@@ -1,5 +1,5 @@
 #coding: utf-8
-import ui, json, uuid
+import json
 
 DEBUG = False
 
@@ -83,7 +83,6 @@ class JSWrapper():
   def set_field(self, field_name, value):
     self.xpath(f"input[@name='{field_name}']").set_attribute('value', value)
 
-    
   def list_each(self, expr):
     expr = self.fix(expr)
     js = f'result_list = []; nodeset = document.evaluate("{expr}", elem, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null); not_found = true;\n while(elem = nodeset.iterateNext(), elem) {{\n not_found = false; { self.generate_value_js() } result_list.push(result); }}; if (not_found) {{ result = "No iterable element found"; }};\n JSON.stringify(result_list);\n\n'
@@ -187,141 +186,3 @@ class JSWrapper():
   def to_string(self):
     return JSWrapper(self, 'elem.toString();').evaluate()
 
-
-class WebScraper(JSWrapper):
-  
-  callback_prefix = 'pythonista-callback://'
-  callbacks = {}
-  
-  def __init__(self, webview):
-    super().__init__(webview)
-    webview.delegate = self
-    self.url_map = {
-      'about:blank': self.default 
-    }
-    self.handler = self.default
-    
-  def start(self):
-    self.handler = self.default
-    self.load_url('about:blank')
-    
-  def webview_did_finish_load(self, webview):
-    url = webview.eval_js('document.URL')
-    print('Page:', url)
-    expected_prefix = self.url_map.get(self.handler, 'No action')
-    if url.startswith(expected_prefix):
-      print('Handler:', self.handler.__name__)
-      self.handler()
-      
-  def set_callback(self, func):
-    callback_id = str(uuid.uuid4())[-12:]
-    self.callbacks[callback_id] = func
-    return callback_id
-      
-  def webview_should_start_load(self, webview, url, nav_type):
-    if url.startswith(self.callback_prefix):
-      callback_id = url[len(self.callback_prefix):]
-      callback_func = self.callbacks[callback_id]
-      del self.callbacks[callback_id]
-      ui.delay(callback_func, 0.001)
-      return False
-    return True
-    
-  def webview_did_fail_load(self, webview, error_code, error_msg):
-    if error_code != -999:
-      print(error_code, error_msg)
-    
-  def default(self):
-    pass
-
-if __name__ == '__main__':
-  
-  html = '''
-<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>Test document</title>
-  </head>
-  <body style="background-color: blue;">
-    <div id="test" class="test_class" style="position:absolute; background-color: inherit; border: solid 2px black;top:100px;left:100px;overflow:hidden;">Text in here</div>
-    <form name="form1" action="http://google.com">
-      <input type="text" name="username"/>
-      <input type="text" name="passwd"/>
-      <input type="submit" value="Submit">
-    </form>
-    <table>
-      <tr>
-        <td>A1</td><td>A2</td><td>A3</td>
-      </tr>
-      <tr>
-        <td>B1</td><td>B2</td><td>B3</td>
-      </tr>
-    </table>
-  </body>
-</html>
-  '''
-
-  
-  class DemoScraper(WebScraper):
-    
-    def __init__(self, webview):
-      super().__init__(webview)
-      self.url_map = {
-        self.login_page: 'applewebdata://',
-        self.content_page: 'https://www.google.com'
-      }
-      self.handler = self.login_page
-      
-    def login_page(self):
-      
-      assert self.xpath('head/title').to_string() == '[object HTMLTitleElement]'
-      
-      assert self.xpath('head/title').value() == 'Test document'
-      
-      assert self.value('head/title') == 'Test document'
-      
-      assert self.xpath('*[@class="test_class"]').to_string() == '[object HTMLDivElement]'
-      
-      test_div = self.by_id('test')
-      
-      assert test_div.to_string() == '[object HTMLDivElement]'
-      
-      assert test_div.exists()
-      
-      assert not self.xpath('foobar').exists()
-      
-      assert test_div.style('top') == 100.0
-      
-      assert test_div.style('backgroundColor') == 'inherit'
-      
-      assert test_div.abs_style('backgroundColor') == 'rgb(0, 0, 255)'
-    
-      test_div.set_style('left', 5)
-      
-      assert test_div.abs_style('left') == 5.0
-      
-      names = self.list_each('input/@name')
-      assert names == [ 'username', 'passwd' ]
-      
-      cell_values = self.for_each('table//tr').map(
-        key='td[1]',
-        some_value='td[3]'
-      )
-      assert cell_values == {'A1': {'some_value': 'A3'}, 'B1': {'some_value': 'B3'}}
-      
-      self.set_field('username', 'your username')
-      self.set_field('passwd', 'your password')
-      
-      self.handler = self.content_page
-      self.by_name('form1').submit()
-
-    def content_page(self):
-      print(self.xpath('body').html())
-
-    
-  wv = ui.WebView()
-  ds = DemoScraper(wv)
-  wv.load_html(html)
-  wv.present()
-  
