@@ -1,4 +1,5 @@
 #coding: utf-8
+import json
 
 class WebViewShared():
   
@@ -8,7 +9,7 @@ class WebViewShared():
     if event == 'resize':
       self.resize_handler()
     elif event == 'loaded':
-      self.loaded = True
+      self.app.loaded()
     elif event == 'error':
       raise Exception('JavaScript error:\n' + json.dumps(params[0], indent=2))
 

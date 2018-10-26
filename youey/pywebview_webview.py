@@ -15,7 +15,7 @@ class WebView(WebViewShared):
     self.background_color = app.default_theme.background.hex
 
     self.delegate = self
-    self.loaded = False
+    #self.loaded = False
     self.scales_page_to_fit = False
     self.objc_instance.subviews()[0].subviews()[0].setScrollEnabled(False)
   

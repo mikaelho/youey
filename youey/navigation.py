@@ -9,10 +9,13 @@ class NavigationView(View):
     self.title_area = View(self).dock_top()
     self.title_label = LabelView(self.title_area).dock_sides()
     self.title_area.height = Height(self.title_label)
+
     self.container = ContainerView(self).dock_bottom()
+
     self.container.top = Bottom(self.title_area)
     self.container.padding = 10
     self.dock_all()
+
     
   def apply_theme(self):
     t = self.theme

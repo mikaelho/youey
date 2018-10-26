@@ -1,12 +1,11 @@
 #coding: utf-8
 from .util.inheritable import WebView as InheritableWebView
-from .shared_webview import WebViewShared
 from .jswrapper import JSWrapper
 import ui
 import json
 from urllib.parse import quote, unquote
 
-class WebView(InheritableWebView, WebViewShared):
+class WebView(InheritableWebView):
   
   event_prefix = 'youey-event:'
   callback_code = 'window.location.href="youey-event:" + encodeURIComponent(JSON.stringify(package));'
@@ -29,15 +28,9 @@ class WebView(InheritableWebView, WebViewShared):
   #self.loaded = True
     
   def webview_should_start_load(self, webview, url, nav_type):
-    '''
-    if url.startswith('youey-log:'):
-      debug_info = json.loads(unquote(url[10:]))
-      raise Exception('JavaScript error:\n' + json.dumps(debug_info, indent=2))
-      return False
-    '''
     if url.startswith(self.event_prefix):
       event_info = json.loads(unquote(url[len(self.event_prefix):]))
-      self.handle_event_callback(event_info)
+      self.app.handle_event_callback(event_info)
       return False
     return True
 

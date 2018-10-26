@@ -317,7 +317,6 @@ class LayoutHelpers():
     if isinstance(value, At):
       value.ref._dependents.add((self, prop))
     actual_value = self._resolve_anchor(prop)
-    #self.root._update_dependencies(self)
     return actual_value
     
   def _resolve_anchor(self, prop):
@@ -327,7 +326,6 @@ class LayoutHelpers():
       return anchor
     else:
       return anchor.resolve()
-    #return None
     
   def _refresh(self, dep_prop):
     _set(self, dep_prop, Refresh)

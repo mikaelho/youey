@@ -31,13 +31,13 @@ class View(AbstractView, JSWrapper, LayoutProperties, StyleProperties):
 
   default_theme = default_theme
 
-  def __init__(self, parent, name=None, **kwargs):
+  def __init__(self, parent, id=None, **kwargs):
     self.parent = parent
     self.root = parent.root
-    self.id = type(self).__name__
+    self.id = id or type(self).__name__
     
     theme = kwargs.pop('theme', None)
-    theme = theme or self.default_theme
+    self.theme = theme or self.default_theme
         
     self.children = []
     self._anchors = {}
@@ -50,7 +50,6 @@ class View(AbstractView, JSWrapper, LayoutProperties, StyleProperties):
     super().setup()
     self.setup()
     
-    self.theme = theme
     super().apply_theme()
     self.apply_theme()
     
@@ -103,9 +102,3 @@ class View(AbstractView, JSWrapper, LayoutProperties, StyleProperties):
     else:
       return getattr(self, base_prop, None)
 
-
-if __name__ == '__main__': 
-  r = App(MockWebView())
-  print(r.id)
-  l = Label(r, text='blaa', tint_color='blue')
-  print(l.id)
