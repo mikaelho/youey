@@ -9,11 +9,11 @@ platf = platform.platform()
 webview_provider = 'Pythonista' if 'iPhone' in platf or 'iPad' in platf else 'pywebview'
 
 class AppBase(View):
-  def __init__(self, title='Youey App', fullscreen=False):
+  def __init__(self, title='Youey App', fullscreen=None):
     self.root = self
     self._all_views_by_id = {}
     self.views = {}
-    self.fullscreen = fullscreen
+    self.fullscreen = self.fullscreen_default if fullscreen is None else fullscreen
     with open('youey/main-ui.html', 'r', encoding='utf-8') as main_html_file:
       main_html = main_html_file.read()
     main_html = main_html.replace('[actual send code]', self.callback_code)
@@ -82,6 +82,7 @@ if webview_provider == 'Pythonista':
   
   class App(AppBase):
     
+    fullscreen_default = True
     event_prefix = 'youey-event:'
     callback_code = 'window.location.href="youey-event:" + encodeURIComponent(JSON.stringify(package));'
     
@@ -99,6 +100,7 @@ if webview_provider == 'Pythonista':
         'animated': False,
         'title_bar_color': wv.background_color
       }
+      
       if self.fullscreen:
         kwargs['hide_title_bar'] = True
         wv.present('full_screen', **kwargs)
@@ -116,11 +118,13 @@ if webview_provider == 'Pythonista':
   
 elif webview_provider == 'pywebview':
   
+  
   import webview
   import threading, functools
   
   class App(AppBase):
-    
+   
+    fullscreen_default = False
     callback_code = 'window.pywebview.api.event(package);'
     
     def open_webview(self, title, html):
@@ -131,7 +135,7 @@ elif webview_provider == 'pywebview':
       webview.create_window(
         title, js_api=self, fullscreen=self.fullscreen, background_color=self.default_theme.background.hex)
 
-    def load_html():
+    def load_html(self):
       webview.load_html(self.html)
       
     def event(self, package):
