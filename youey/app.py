@@ -13,6 +13,7 @@ class AppBase(View):
     self.root = self
     self._all_views_by_id = {}
     self.views = {}
+    self.initialized = False
     self.fullscreen = self.fullscreen_default if fullscreen is None else fullscreen
     with open('youey/main-ui.html', 'r', encoding='utf-8') as main_html_file:
       main_html = main_html_file.read()
@@ -25,10 +26,15 @@ class AppBase(View):
   def on_error(self, params):
     raise Exception('JavaScript error:\n' + json.dumps(params[0], indent=2))
     
-  def on_loaded(self, params):
-    super().__init__(self, id='App')
+  def on_load(self, params):
+    if not self.initialized:
+      super().__init__(self, id='App')
+      self.initialized = True
     
   def on_resize(self, params):
+    if not self.initialized:
+      super().__init__(self, id='App')
+      self.initialized = True
     self.width, self.height = float(self.webview.eval_js('window.innerWidth')), float(self.webview.eval_js('window.innerHeight'))
 
   def apply_theme(self):
