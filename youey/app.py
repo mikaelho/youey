@@ -135,6 +135,7 @@ elif webview_provider == 'pywebview':
     
     def open_webview(self, title, html):
       self.html = html
+      self.webview = self
       t = threading.Thread(target=self.load_html)
       t.start()
 
@@ -149,6 +150,8 @@ elif webview_provider == 'pywebview':
       params = event_info['params']
       self.handle_event_callback(event, params)
 
+    def eval_js(self, js):
+      return webview.evaluate_js
 
 if __name__ == '__main__':
   pass
