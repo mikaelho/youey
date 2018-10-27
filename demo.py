@@ -29,5 +29,5 @@ class DemoApp(App):
         top=Bottom(card_title)
       ).dock_bottom()
 
-app = DemoApp(fullscreen=True)
+app = DemoApp()
 
