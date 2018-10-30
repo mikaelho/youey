@@ -39,6 +39,9 @@ class JSWrapper():
     expr = self.fix(expr)
     js = f'xpath_result = document.evaluate("{expr}", elem, null, XPathResult.ANY_TYPE, null); elem = xpath_result.iterateNext();'
     return JSWrapper(self, js)
+    
+  def child(self):
+    return JSWrapper(self, f'elem = elem.firstChild;')
   
   def value(self, expr=None):
     return JSWrapper(self, self.generate_value_js(expr)).evaluate()
@@ -78,6 +81,10 @@ class JSWrapper():
     
   def append(self, html):
     js = f'elem.insertAdjacentHTML("beforeend", "{html}");'
+    JSWrapper(self, js).evaluate()
+  
+  def remove(self):
+    js = f'elem.parentNode.removeChild(elem);'
     JSWrapper(self, js).evaluate()
   
   def set_field(self, field_name, value):

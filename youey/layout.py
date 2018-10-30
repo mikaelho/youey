@@ -27,7 +27,8 @@ def _prop(obj, name):
     MAX_HEIGHT: type(obj).max_height,
     MIN_HEIGHT: type(obj).min_height,
     INNER_HEIGHT: type(obj).inner_height,
-    MIDDLE: type(obj).middle
+    MIDDLE: type(obj).middle,
+    SIZE: type(obj).size
   }
   return props[name]
 
@@ -354,8 +355,12 @@ class At():
       result = _get(self.receiver[0].parent, self.receiver[1]) - result
     if type(self.multiplier) is str:
       self.multiplier = float(self.multiplier.strip('%'))/100
-    result *= self.multiplier or 1
-    result += self.offset
+    if type(result) is tuple:
+      result = tuple((elem * self.multiplier or 1 for elem in result))
+      result = tuple((elem + self.offset for elem in result))
+    else:
+      result *= self.multiplier or 1
+      result += self.offset
     return result
     
   def from_edge(self, result):
@@ -420,23 +425,9 @@ class Bottom(FromEdge):
 def _to_edge(view, prop, value):
   return _get(view, prop) - value
   
-class Size(list):
-  
-  @property
-  def width(self):
-    return self[0]
-    
-  @width.setter
-  def width(self, value):
-    self[0] = value
-    
-  @property
-  def height(self):
-    return self[1]
-    
-  @height.setter
-  def height(self, value):
-    self[1] = value
+class Size(At):
+  def __init__(self, ref, multiplier=None, offset=0):
+    super().__init__(ref, SIZE, multiplier, offset)
   
 
 if __name__ == '__main__':

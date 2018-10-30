@@ -2,13 +2,24 @@
 from youey.view import *
 from youey.label import *
 from youey.container import *
+from youey.image import *
 
 class NavigationView(View):
 
   def setup(self):
     self.title_area = View(self).dock_top()
-    self.title_label = LabelView(self.title_area).dock_sides()
+    
+    self.title_label = LabelView(self.title_area,   
+      center=Width(self.title_area, multiplier=0.5))#.dock_sides()
+    
     self.title_area.height = Height(self.title_label)
+    
+    self.title_icon = ImageView(self.title_area,
+      right = Left(self.title_label),
+      size = (Height(self.title_area, multiplier=0.5),)*2,
+      #height=Height(self.title_area, multiplier=0.5),
+      middle=Height(self.title_area, multiplier=0.5)
+    )
 
     self.container = ContainerView(self).dock_bottom()
 
@@ -22,6 +33,7 @@ class NavigationView(View):
     self.title_area.background_color = t.primary
     self.title_label.color = t.on_primary
     self.title_label.font = t.title_2
+    self.title_icon.fill = t.on_primary
     self.container.border = t.primary
     
   @prop
@@ -30,6 +42,14 @@ class NavigationView(View):
       self.title_label.text = args[0]
     else:
       return self.title_label.text
+      
+  @prop
+  def icon(self, *args, base_prop):
+    if args:
+      self.title_icon.image = args[0]
+      setattr(self, base_prop, args[0])
+    else:
+      return getattr(self, base_prop, None) 
       
   @prop
   def flow_direction(self, *args, base_prop):

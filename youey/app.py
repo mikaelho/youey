@@ -42,6 +42,13 @@ class AppBase(View):
     js = JSWrapper(self.webview)
     parent_elem = js.by_id(parent.id)
     parent_elem.append(child.render())
+    
+  def _remove_child_from(self, child, parent):
+    if parent is child: return
+    parent.children.remove(child)
+    js = JSWrapper(self.webview)
+    child_elem = js.by_id(child.id)
+    child_elem.remove()
 
   def _update_dependencies(self, changed_view):
     try:

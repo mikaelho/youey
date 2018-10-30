@@ -19,3 +19,5 @@ MIDDLE = 'middle'
 HORIZONTAL = 'horizontal'
 VERTICAL = 'vertical'
 
+SIZE = 'size'
+
