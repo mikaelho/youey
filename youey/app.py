@@ -1,7 +1,7 @@
 #coding: utf-8
 from youey.view import *
 
-import json
+import json, os
 from urllib.parse import unquote
 
 import platform
@@ -15,7 +15,7 @@ class AppBase(View):
     self.views = {}
     self.initialized = False
     self.fullscreen = self.fullscreen_default if fullscreen is None else fullscreen
-    with open('youey/main-ui.html', 'r', encoding='utf-8') as main_html_file:
+    with open(os.path.dirname(__file__)+'/main-ui.html', 'r', encoding='utf-8') as main_html_file:
       main_html = main_html_file.read()
     main_html = main_html.replace('[actual send code]', self.callback_code)
     self.open_webview(title, main_html)
@@ -50,7 +50,7 @@ class AppBase(View):
     child_elem = js.by_id(child.id)
     child_elem.remove()
 
-  def _update_dependencies(self, changed_view):
+  def _update_all_dependencies(self, changed_view):
     try:
       changed_view.on_resize()
     except: pass

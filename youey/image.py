@@ -23,24 +23,27 @@ class ImageView(View):
         if provider:
           abs_root_path = os.path.dirname(__file__)
           tentative_path = img_path = f'{abs_root_path}/resources/images/{provider}/{image_family}/{image_name}'
-          i = 0
-          while not os.path.exists(img_path):
-            try:
-              img_path = tentative_path + '.' + self.extensions[i]
-            except IndexError:
-              raise FileNotFoundError(tentative_path)
-            i +=1
-      if img_path.endswith('.svg'):
+      i = 0
+      while not os.path.exists(img_path):
+        try:
+          img_path = tentative_path + '.' + self.extensions[i]
+        except IndexError:
+          raise FileNotFoundError(tentative_path)
+        i +=1
+      if img_path.endswith('.svg') or img_path.endswith('.SVG'):
         with open(img_path, 'r') as f:
           svg = f.read()
         svg = svg.replace('"', "'")
+        search_str = svg.lower()
+        start = search_str.index('<svg')
+        svg = svg[start:]
         self._js.set_content(svg)
+        img_elem = self._js.child()
+        img_elem.set_style('width', '100%')
+        img_elem.set_style('height', '100%')
       else:
-        js = f'<img src="file:/{img_path}">'
+        js = f'<img style="object-fit: contain; height: 100%; width: 100%;" src="file:/{os.path.abspath(img_path)}">'
         self._js.set_content(js)
-      img_elem = self._js.child()
-      img_elem.set_style('width', '100%')
-      img_elem.set_style('height', '100%')
       self._refresh_anchors()
       setattr(self, base_prop, args[0])
     else:

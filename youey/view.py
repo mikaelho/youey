@@ -56,12 +56,14 @@ class View(AbstractView, JSWrapper, LayoutProperties, StyleProperties):
     for key in kwargs:
       getattr(self, key)
       setattr(self, key, kwargs[key])
+      
+    self._refresh_anchors()
     
   def render(self):
     return f'<div id=\'{self.id}\' style=\'position: absolute; box-sizing: border-box; overflow: hidden; text-overflow: ellipsis;\'></div>'
     
   def _update_dependencies(self):
-    self.root._update_dependencies(self)
+    self.root._update_all_dependencies(self)
     
   def _refresh_anchors(self):
     for prop in self._anchors:

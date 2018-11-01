@@ -309,7 +309,7 @@ class LayoutHelpers():
     prop = to_camel_case(prop)
     self._js.set_style(prop, value)
     if original_intent is not Refresh:
-      self.root._update_dependencies(self)
+      self.root._update_all_dependencies(self)
   
   def _set_anchor(self, prop, value):
     if value == Refresh:
@@ -424,6 +424,22 @@ class Bottom(FromEdge):
 
 def _to_edge(view, prop, value):
   return _get(view, prop) - value
+  
+class AddOn(At):
+  
+  def __init__(self, *anchors):
+    self._anchors = anchors
+    
+class Min(AddOn):
+  
+  def resolve(self):
+    return min([anchor.resolve() for anchor in self._anchors])
+    
+class Max(AddOn):
+  
+  def resolve(self):
+    return max([anchor.resolve() for anchor in self._anchors])
+    
   
 class Size(At):
   def __init__(self, ref, multiplier=None, offset=0):

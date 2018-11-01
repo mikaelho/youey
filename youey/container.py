@@ -28,4 +28,17 @@ class ContainerView(View):
       except ValueError:
         raise ValueError('Unexpected flow_direction CSS value: ' + str(value))
       return value
+      
+  @prop
+  def spread(self, *args, base_prop):
+    if args and self.flow_direction is not None:
+      if args[0]:
+        self._js.set_style('justifyContent', 'space-evenly')
+        self._js.set_style('alignItems', 'space-evenly')
+      else:
+        self._js.set_style('justifyContent', 'flex-start')
+        self._js.set_style('alignItems', 'flex-start')
+      setattr(self, base_prop, args[0])
+    else:
+      return getattr(self, base_prop, None)
 

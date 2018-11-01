@@ -76,7 +76,8 @@ class JSWrapper():
     JSWrapper(self, f'elem.{attr_name} = "{value}";').evaluate()
   
   def set_content(self, content):
-    content = str(content)
+    content = str(content).replace('"', "'")
+    
     JSWrapper(self, f'elem.innerHTML =  "{content}";').evaluate()
     
   def append(self, html):

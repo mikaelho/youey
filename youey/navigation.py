@@ -57,3 +57,10 @@ class NavigationView(View):
       self.container.flow_direction = args[0] 
     else:
       return self.container.flow_direction
+      
+  @prop
+  def spread(self, *args, base_prop):
+    if args:
+      self.container.spread = args[0] 
+    else:
+      return self.container.spread
