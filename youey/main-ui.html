@@ -7,7 +7,28 @@
     * {
         -webkit-user-select: none;
     }
+    
+    ripple {
+		  width: 0;
+		  height: 0;
+		  border-radius: 50%;
+		  background: rgba(255, 255, 255, 0.4);
+		  transform: scale(0);
+		  position: absolute;
+		  opacity: 1;
+		}
+		.rippleEffect {
+		    animation: rippleDrop .6s linear;
+		}
+		
+		@keyframes rippleDrop {
+		  100% {
+		    transform: scale(2);
+		    opacity: 0;
+		  }
+		}
     </style>
+    
     <script>
       console = new Object();
       console.log = function(log) {
@@ -33,7 +54,9 @@
         sendEvent("load");
       }
 
-      window.addEventListener("resize", function(event) { sendEvent("resize"); })
+      window.addEventListener("resize", function(event) { sendEvent("window_resize"); })
+
+      var youey_handlers = {}; 
 
     </script>
   </head>

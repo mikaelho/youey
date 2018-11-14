@@ -17,7 +17,7 @@ class DashboardApp(App):
     
     nav = NavigationView(self, title='ZLO', icon='solid:car')#, flow_direction=HORIZONTAL, spread=True)
     
-    ImageView(nav.container, image='vw-model-egolf.png').dock_all().left=Width(nav.container, multiplier=.2)
+    ImageView(nav.container, image='vw-model-egolf.png').dock_all().left=Width(nav.container, .2)
     
     semi_transparent_bg = Color(nav.theme.background, alpha=0.7)
     almost_opaque_bg = Color(nav.theme.background, alpha=0.8)
@@ -26,6 +26,7 @@ class DashboardApp(App):
     container = ContainerView(nav.container, flow_direction=HORIZONTAL, spread=True, background_color=semi_transparent_bg).dock_all()
     
     #self.car_data = CarData()
+    
     dummy_values = {
       'celcius': 10,
       'externalPowerSupplyState': 'unavailable',
@@ -39,13 +40,16 @@ class DashboardApp(App):
     self.car_data = SimpleNamespace(**dummy_values)
     
     cards = [
-      ('Lämpötila', 'solid:cloud-sun', str(round(self.car_data.celcius)) + ' °C'),
-      ('Lataus', 'solid:plug' if self.car_data.externalPowerSupplyState == 'available' else 'solid:car-battery', str(self.car_data.stateOfCharge) + '%'), ('Matka', 'solid:charging-station', str(self.car_data.primaryEngineRange) + ' KM'), ('Lämmitys', 'solid:thermometer-half', self.car_data.climateHeatingStatus), ('Lukitus', 'solid:unlock', self.car_data.mileage), ('Ikkunat', 'solid:snowflake.svg', self.car_data.climateHeatingWindowFrontStatus + '\n\n' + self.car_data.climateHeatingWindowRearStatus) ]
+      ('Lämpötila', 'solid:cloud-sun', str(round(self.car_data.celcius)), '°C'),
+      ('Lataus', 'solid:plug' if self.car_data.externalPowerSupplyState == 'available' else 'solid:car-battery', str(self.car_data.stateOfCharge), '%'), ('Matka', 'solid:charging-station', str(self.car_data.primaryEngineRange), 'KM'), ('Lämmitys', 'solid:thermometer-half', self.car_data.climateHeatingStatus, ''), ('Lukitus', 'solid:unlock', self.car_data.mileage, 'KM'), ('Ikkunat', 'solid:snowflake.svg', self.car_data.climateHeatingWindowFrontStatus + '\n\n' + self.car_data.climateHeatingWindowRearStatus, '') ]
     
-    for i, (title, icon, data) in enumerate(cards):
-      card = StyledCardView(container, size=(Min(Width(container, multiplier=0.45), Height(container, multiplier=0.45)),)*2, background_color=almost_opaque_bg)
+    for i, (title, icon, data, unit) in enumerate(cards):
+      card = StyledCardView(container, 
+        width=Width(container, lambda: 1/2 if container.is_portrait else 1/3, offset=-10),
+        height=Height(container, lambda: 1/3 if container.is_portrait else 1/2, offset=-10),
+        background_color=almost_opaque_bg)
       
-      card_title = LabelView(card, 
+      card_caption = LabelView(card, 
         text=title.upper(), 
         font=card.theme.caption_1,
         text_color=card.theme.on_surface,
@@ -56,21 +60,30 @@ class DashboardApp(App):
       card_icon = ImageView(card,
         image=icon,
         fill=card.theme.variant,
-        middle=Width(card, multiplier=.5),
-        center=Width(card, multiplier=.25),
-        height=Width(card, multiplier=.4),
-        width=Width(card, multiplier=.4)
+        middle=Height(card, .5),
+        center=Width(card, .25),
+        height=Height(card, .4),
+        width=Height(card, .4),
       )
       
       card_text = LabelView(card, 
         text=str(data).upper(),
-        font=card.theme.headline,
+        font=card.theme.title_1,
         text_color=card.theme.primary,
-        text_align=CENTER,
-        padding=(0, 10),
+        text_align=RIGHT,
+        padding=(0,30),
         right=0,
-        middle=Height(card, multiplier=.5),
-        width=Width(card, multiplier=.5)
+        middle=Height(card, .5),
+      )
+      
+      unit_text = LabelView(card,
+        text=unit,
+        font=card.theme.caption_1,
+        text_color=card.theme.on_surface,
+        text_align=RIGHT,
+        padding=(0,30),
+        top=Bottom(card_text),
+        right=0
       )
       
       

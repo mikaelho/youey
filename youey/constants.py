@@ -15,9 +15,14 @@ MAX_HEIGHT = 'max_height'
 MIN_HEIGHT = 'min_height'
 INNER_HEIGHT = 'inner_height'
 MIDDLE = 'middle'
+GRID_SIZE = 'grid_size'
 
 HORIZONTAL = 'horizontal'
 VERTICAL = 'vertical'
+
+PORTRAIT = 'portrait'
+LANDSCAPE = 'landscape'
+SQUARE = 'square'
 
 SIZE = 'size'
 

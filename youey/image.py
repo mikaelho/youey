@@ -37,18 +37,23 @@ class ImageView(View):
         search_str = svg.lower()
         start = search_str.index('<svg')
         svg = svg[start:]
-        self._js.set_content(svg)
-        img_elem = self._js.child()
-        img_elem.set_style('width', '100%')
-        img_elem.set_style('height', '100%')
+        self._set_image(svg)
       else:
-        js = f'<img style="object-fit: contain; height: 100%; width: 100%;" src="file:/{os.path.abspath(img_path)}">'
+        js = f'<img style="object-fit: contain; height: 100%; width: 100%; pointer-events: none;" src="file:/{os.path.abspath(img_path)}">'
         self._js.set_content(js)
       self._refresh_anchors()
       setattr(self, base_prop, args[0])
     else:
       return getattr(self, base_prop, None)
       
+  def _set_image(self, svg):
+    if svg == '': return 
+    self._js.set_content(svg)
+    img_elem = self._js.child()
+    img_elem.set_style('width', '100%')
+    img_elem.set_style('height', '100%')
+    img_elem.set_style('pointerEvents', 'none')
+        
   @prop
   def url(self, *args, base_prop):
     if args:
@@ -62,33 +67,19 @@ class ImageView(View):
     else:
       return getattr(self, base_prop, None)
       
+  @prop
+  def height(self, *args, base_prop):
+    "SVG images seem to need a reset to scale properly if width and height are set in thw 'wrong' order."
+    if args:
+      self._setr(HEIGHT, args[0])
+      self._set_image(self._js.html())
+    else:
+      return self._getr(HEIGHT)
+      
   @jsprop
   def fill(self, *args, js_prop):
     if args:
       self._js.set_style(js_prop, Color(args[0]).css)
     else:
       return self._js.abs_style(js_prop)
-      
-      
-class SVGImageView(View):
 
-  #def render(self):
-    #return f'<img id=\'{self.id}\'>'
-    #return f'<svg id=\'{self.id}\'></svg>'
-    
-  @prop
-  def src(self, *args, base_prop):
-    if args:
-      with open(args[0], 'r') as f:
-        svg = f.read()
-      print(svg)
-      #self._js.set_attr('src', args[0])
-      self._js.set_content(svg)
-      setattr(self, base_prop, args[0])
-    else:
-      return getattr(self, base_prop, None)
-    
-class BitmapImageView(View):
-
-  def render(self):
-    return f'<img id=\'{self.id}\'>'

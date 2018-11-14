@@ -4,20 +4,21 @@ from youey.label import *
 from youey.container import *
 from youey.image import *
 
+
 class NavigationView(View):
 
   def setup(self):
+    super().setup()
     self.title_area = View(self).dock_top()
     
     self.title_label = LabelView(self.title_area,   
-      center=Width(self.title_area, multiplier=0.5))#.dock_sides()
+      center=Width(self.title_area, 0.5))
     
     self.title_area.height = Height(self.title_label)
     
     self.title_icon = ImageView(self.title_area,
       right = Left(self.title_label),
       size = (Height(self.title_area, multiplier=0.5),)*2,
-      #height=Height(self.title_area, multiplier=0.5),
       middle=Height(self.title_area, multiplier=0.5)
     )
 
@@ -29,6 +30,7 @@ class NavigationView(View):
 
     
   def apply_theme(self):
+    super().apply_theme()
     t = self.theme
     self.title_area.background_color = t.primary
     self.title_label.color = t.on_primary

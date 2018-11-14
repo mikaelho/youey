@@ -6,13 +6,15 @@ class LabelView(View):
   '''
 
   def setup(self):
+    super().setup()
     self._label = JSWrapper(self.root.webview).by_id(self.id+'-text')
     self.on_resize = self._set_overflow
     
   def render(self):
-    return f'<div id=\'{self.id}\' style=\'position: absolute; box-sizing: border-box; overflow: hidden;\'><div id=\'{self.id}-text\' style=\'position: relative; max-height: auto; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical;\'></div></div>'
+    return f'<div id=\'{self.id}\' style=\'position: absolute; box-sizing: border-box; overflow: hidden; pointer-events: none;\'><div id=\'{self.id}-text\' style=\'position: relative; max-height: auto; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; pointer-events: none;\'></div></div>'
 
   def apply_theme(self):
+    super().apply_theme()
     t = self.theme
     self.color = t.on_background
     self.text_align = t.label_align

@@ -28,6 +28,7 @@ def _prop(obj, name):
     MIN_HEIGHT: type(obj).min_height,
     INNER_HEIGHT: type(obj).inner_height,
     MIDDLE: type(obj).middle,
+    GRID_SIZE: type(obj).grid_size,
     SIZE: type(obj).size
   }
   return props[name]
@@ -158,9 +159,15 @@ class PublicLayoutProperties():
   @prop
   def size(self, *args, base_prop):
     if args:
-      self.width, self.height = args[0]
+      value = args[0]
+      value = self._set_anchor(SIZE, value)
+      self.width, self.height = value
     else:
-      return (self.width, self.height)
+      return self._getr(SIZE)
+    
+  @property
+  def grid_size(self):
+    raise RuntimeError('This property should only be accessed in ContainerView')
     
     
   '''
@@ -253,38 +260,56 @@ class Refresh():
   
 class LayoutMacros():
   
-  def dock_all(self):
-    self.left = self.top = self.right = self.bottom = 0
+  def dock_all(self, offset=0):
+    self.left = self.top = self.right = self.bottom = offset
     return self
   
-  def dock_left(self):
-    self.left = self.top = self.bottom = 0
+  def dock_left(self, offset=0):
+    self.left = self.top = self.bottom = offset
     return self
   
-  def dock_top(self):
-    self.left = self.top = self.right = 0
+  def dock_top(self, offset=0):
+    self.left = self.top = self.right = offset
     return self
     
-  def dock_right(self):
-    self.top = self.right = self.bottom = 0
+  def dock_right(self, offset=0):
+    self.top = self.right = self.bottom = offset
     return self
     
-  def dock_bottom(self):
-    self.left = self.bottom = self.right = 0
+  def dock_bottom(self, offset=0):
+    self.left = self.bottom = self.right = offset
     return self
     
-  def dock_sides(self):
-    self.left = self.right = 0
+  def dock_sides(self, offset=0):
+    self.left = self.right = offset
     return self
     
-  def dock_top_and_bottom(self):
-    self.top = self.bottom = 0
+  def dock_top_and_bottom(self, offset=0):
+    self.top = self.bottom = offset
     return self
     
   def dock_center(self):
     self.center = Center(self.parent)
     self.middle = Middle(self.parent)
     return self
+
+  # Layout helpers
+  @property
+  def orientation(self):
+    if self.width > self.height:
+      return LANDSCAPE
+    elif self.width < self.height:
+      return PORTRAIT
+    else:
+      return SQUARE
+      
+  @property
+  def is_landscape(self):
+    return self.orientation == LANDSCAPE
+    
+  @property
+  def is_portrait(self):
+    return self.orientation == PORTRAIT
 
   
 class LayoutHelpers():
@@ -306,8 +331,9 @@ class LayoutHelpers():
     value = self._set_anchor(prop, value)
     if value is None:
       value = 'auto'
-    prop = to_camel_case(prop)
-    self._js.set_style(prop, value)
+    if type(value) is not tuple:
+      prop = to_camel_case(prop)
+      self._js.set_style(prop, value)
     if original_intent is not Refresh:
       self.root._update_all_dependencies(self)
   
@@ -323,13 +349,13 @@ class LayoutHelpers():
   def _resolve_anchor(self, prop):
     anchor = self._anchors.get(prop, None)
     if anchor is None: return None
-    if type(anchor) in [int, float]:
+    if type(anchor) in [int, float, tuple]:
       return anchor
     else:
       return anchor.resolve()
     
-  def _refresh(self, dep_prop):
-    _set(self, dep_prop, Refresh)
+  def _refresh(self, prop):
+    _set(self, prop, Refresh)
     
     
 class LayoutProperties(PublicLayoutProperties, LayoutMacros, LayoutHelpers):
@@ -349,18 +375,23 @@ class At():
 
   def resolve(self):
     result = _get(self.ref, self.prop)
+    if type(result) is tuple:
+      return result
     if isinstance(self, FromEdge):
       result = _get(self.ref.parent, self.invert_prop) - result
     if self.receiver and not isinstance(self, NotCoordinateValue): # is inverted
       result = _get(self.receiver[0].parent, self.receiver[1]) - result
     if type(self.multiplier) is str:
       self.multiplier = float(self.multiplier.strip('%'))/100
+    '''
     if type(result) is tuple:
       result = tuple((elem * self.multiplier or 1 for elem in result))
       result = tuple((elem + self.offset for elem in result))
     else:
-      result *= self.multiplier or 1
-      result += self.offset
+    '''
+    multiplier = self.multiplier if not callable(self.multiplier) else self.multiplier()
+    result *= multiplier or 1
+    result += self.offset
     return result
     
   def from_edge(self, result):
@@ -422,6 +453,10 @@ class Bottom(FromEdge):
   def __init__(self, ref, multiplier=None, offset=0):
     super().__init__(ref, BOTTOM, multiplier, offset)
 
+class GridSize(At):
+  def __init__(self, ref, multiplier=None, offset=0):
+    super().__init__(ref, GRID_SIZE, multiplier, offset)
+
 def _to_edge(view, prop, value):
   return _get(view, prop) - value
   
@@ -439,7 +474,6 @@ class Max(AddOn):
   
   def resolve(self):
     return max([anchor.resolve() for anchor in self._anchors])
-    
   
 class Size(At):
   def __init__(self, ref, multiplier=None, offset=0):

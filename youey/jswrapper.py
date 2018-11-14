@@ -81,6 +81,8 @@ class JSWrapper():
     JSWrapper(self, f'elem.innerHTML =  "{content}";').evaluate()
     
   def append(self, html):
+    html = html.replace('"','\\"')
+    html = html.replace("'", "\\'")
     js = f'elem.insertAdjacentHTML("beforeend", "{html}");'
     JSWrapper(self, js).evaluate()
   
@@ -183,7 +185,8 @@ class JSWrapper():
     js = f'setTimeout(function(){{ window.location.href = "{self.target_webview.delegate.callback_prefix}{callback_id}"; }}, {delay_ms});'
     JSWrapper(self, js).evaluate()
     
-  def evaluate(self):
+  def evaluate(self, js=''):
+    self.js += js
     global DEBUG
     if DEBUG: print(self.js)
     return self.target_webview.eval_js(self.js)

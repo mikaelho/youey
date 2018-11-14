@@ -15,19 +15,13 @@ from youey.util.prop import *
 from youey.jswrapper import JSWrapper
 from youey.layout import *
 from youey.style import StyleProperties
+from youey.events import EventProperties
 from youey.theme import *
 #import layoutproperties
 #import styleproperties
-
-class AbstractView():
   
-  def setup(self):
-    pass
-    
-  def apply_theme(self):
-    pass
 
-class View(AbstractView, JSWrapper, LayoutProperties, StyleProperties):
+class View(JSWrapper, LayoutProperties, StyleProperties, EventProperties):
 
   default_theme = default_theme
 
@@ -42,15 +36,16 @@ class View(AbstractView, JSWrapper, LayoutProperties, StyleProperties):
     self.children = []
     self._anchors = {}
     self._dependents = set()
+    self._event_handlers = {}
     
     parent.add_child(self)
     
     self._js = JSWrapper(self.root.webview).by_id(self.id)
     
-    super().setup()
+    #super().setup()
     self.setup()
     
-    super().apply_theme()
+    #super().apply_theme()
     self.apply_theme()
     
     for key in kwargs:
@@ -60,7 +55,13 @@ class View(AbstractView, JSWrapper, LayoutProperties, StyleProperties):
     self._refresh_anchors()
     
   def render(self):
-    return f'<div id=\'{self.id}\' style=\'position: absolute; box-sizing: border-box; overflow: hidden; text-overflow: ellipsis;\'></div>'
+    return f'<div id=\'{self.id}\' style=\'position: absolute; box-sizing: border-box; overflow: hidden; text-overflow: ellipsis; pointer-events: none;\'></div>'
+    
+  def setup(self):
+    pass
+    
+  def apply_theme(self):
+    pass
     
   def _update_dependencies(self):
     self.root._update_all_dependencies(self)
@@ -98,9 +99,10 @@ class View(AbstractView, JSWrapper, LayoutProperties, StyleProperties):
     self.dependents.add(anchor)
     
   @prop
-  def tint_color(self, *args, base_prop):
+  def _events_enabled(self, *args, base_prop):
     if args:
-      setattr(self, base_prop, args[0])
+      value = args[0]
+      self._js.set_style('pointerEvents', 'auto' if value else 'none')
+      setattr(self, base_prop, value)
     else:
-      return getattr(self, base_prop, None)
-
+      return getattr(self, base_prop, False)
