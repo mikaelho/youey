@@ -65,7 +65,10 @@ class JSWrapper():
     return self.by_id(self.id)
     
   def by_name(self, name):
-    return JSWrapper(self, f'elem = document.getElementsByName("{name}")[0];')
+    return JSWrapper(self, f'elem = elem.getElementsByName("{name}")[0];')
+    
+  def by_class(self, css_class):
+    return JSWrapper(self, f'elem = elem.getElementsByClassName("{css_class}")[0];')
   
   def set_attribute(self, attr_name, value):
     value = str(value)
@@ -84,6 +87,12 @@ class JSWrapper():
     html = html.replace('"','\\"')
     html = html.replace("'", "\\'")
     js = f'elem.insertAdjacentHTML("beforeend", "{html}");'
+    JSWrapper(self, js).evaluate()
+    
+  def prepend(self, html):
+    html = html.replace('"','\\"')
+    html = html.replace("'", "\\'")
+    js = f'elem.insertAdjacentHTML("afterbegin", "{html}");'
     JSWrapper(self, js).evaluate()
   
   def remove(self):
@@ -152,6 +161,9 @@ class JSWrapper():
   def _set_style_actual(self, style_attribute, value):
     JSWrapper(self, f'elem.style["{style_attribute}"]={value};').evaluate()
     
+  def add_class(self, css_class):
+    JSWrapper(self, f'elem.classList.add("{css_class}");').evaluate()
+    
   def click(self):
     return JSWrapper(self, 'elem.click();').evaluate()
     
@@ -186,10 +198,9 @@ class JSWrapper():
     JSWrapper(self, js).evaluate()
     
   def evaluate(self, js=''):
-    self.js += js
     global DEBUG
-    if DEBUG: print(self.js)
-    return self.target_webview.eval_js(self.js)
+    if DEBUG: print(self.js + js)
+    return self.target_webview.eval_js(self.js + js)
     
   def evaluate_with_json(self):
     return json.loads(self.evaluate())

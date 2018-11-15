@@ -44,8 +44,8 @@ class ButtonCardView(CardView):
     self.button = self.button_class(self, 
       text=self.title).dock_center()
     
-  def click_handler(self):
-    pass
+  def click_handler(self, view):
+    print(f'click from {view.id}')
 
 class EventsApp(App):
   

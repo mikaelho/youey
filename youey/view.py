@@ -4,13 +4,12 @@ Foundational view object.
 '''
 
 # Support script-local testing
-import os, sys, time
+import os, sys, json
 currDir = os.path.dirname(os.path.realpath(__file__))
 rootDir = os.path.abspath(os.path.join(currDir, '..'))
 if rootDir not in sys.path: 
   sys.path.insert(0, rootDir)
 
-import re
 from youey.util.prop import *
 from youey.jswrapper import JSWrapper
 from youey.layout import *
@@ -20,6 +19,8 @@ from youey.theme import *
 #import layoutproperties
 #import styleproperties
   
+import re
+from types import SimpleNamespace
 
 class View(JSWrapper, LayoutProperties, StyleProperties, EventProperties):
 
@@ -97,6 +98,31 @@ class View(JSWrapper, LayoutProperties, StyleProperties, EventProperties):
     
   def add_dependent(self, anchor):
     self.dependents.add(anchor)
+    
+  def from_view(self, coords, view=None):
+    if view:
+      shape = view._get_screen_shape()
+      coords = (
+        shape.x + coords[0] * shape.x_factor,
+        shape.y + coords[1] * shape.y_factor
+      )
+    self_shape = self._get_screen_shape()
+    return (
+      (coords[0] - self_shape.x)/self_shape.x_factor,
+      (coords[1] - self_shape.y)/self_shape.y_factor
+    )
+    
+  def to_view(self, coords, view=None):
+    pass
+    
+  def _get_screen_shape(self):
+    v_coords = json.loads(self._js.evaluate('JSON.stringify(elem.getBoundingClientRect())'))
+    return SimpleNamespace(
+      x=v_coords['x'], 
+      y=v_coords['y'], 
+      x_factor=self.width/v_coords['width'], 
+      y_factor=self.height/v_coords['height']
+    )
     
   @prop
   def _events_enabled(self, *args, base_prop):

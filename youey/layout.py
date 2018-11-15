@@ -315,12 +315,12 @@ class LayoutMacros():
 class LayoutHelpers():
   
   def _getr(self, prop, prop2=None, inner=False):
-    elem = self._inner if inner else self._js
+    #elem = self._inner if inner else self._js
     prop = to_camel_case(prop)
-    value = elem.abs_style(prop)
+    value = self._js.abs_style(prop)
     if prop2:
       prop2 = to_camel_case(prop2)
-      value2 = elem.abs_style(prop2)
+      value2 = self._js.abs_style(prop2)
       value = value + value2/2
     return value
     

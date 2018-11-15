@@ -5,7 +5,7 @@ from youey.util.prop import prop, jsprop
 class EventProperties():
   
   @prop
-  def on_action(self, *args, base_prop):
+  def obsolete_on_action(self, *args, base_prop):
     if args:
       handler = args[0]
       setattr(self, base_prop, args[0])
