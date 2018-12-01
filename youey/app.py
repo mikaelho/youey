@@ -44,7 +44,7 @@ class AppBase(View):
 
   def _handle_event_callback(self, event, params):
     if event == 'hammer.input':
-      print(params[1])
+      print('unhandled hammer.input')
       return 
     target = self
     event_args = params
@@ -60,7 +60,8 @@ class AppBase(View):
     if event == 'action':
       getattr(target, 'on_action')()
     else:
-      getattr(target, 'on_'+event)(event_args)
+      handler = getattr(target, 'on_'+event)
+      handler(event_args)
 
   def on_error(self, params):
     raise Exception('JavaScript error:\n' + json.dumps(params[0], indent=2))
@@ -68,6 +69,11 @@ class AppBase(View):
   def on_load(self, params):
     self._enable_js_library('local:hammer')
     super().__init__(self, id='App')
+
+  def on_app_close(self):
+    close_handler = getattr(self, 'on_close', None)
+    if callable(close_handler):
+      close_handler()
 
   def on_window_resize(self, params):
     self.width, self.height = float(self.webview.eval_js('window.innerWidth')), float(self.webview.eval_js('window.innerHeight'))
@@ -148,6 +154,17 @@ if webview_provider == 'Pythonista':
 
   import ui
 
+
+  class CloseCatcher(ui.View):
+    
+    def __init__(self, app, **kwargs):
+      self.app = app
+      super().__init__(**kwargs)
+      
+    def will_close(self):
+      self.app.on_app_close()
+    
+
   class App(AppBase):
 
     fullscreen_default = True
@@ -155,7 +172,10 @@ if webview_provider == 'Pythonista':
     callback_code = 'window.location.href="youey-event:" + encodeURIComponent(JSON.stringify(package));'
 
     def open_webview(self, title, html):
-      wv = self.webview = ui.WebView()
+      close_catcher = CloseCatcher(self)
+      
+      wv = self.webview = ui.WebView(frame=close_catcher.bounds, flex='WH')
+      close_catcher.add_subview(wv)
 
       wv.background_color = self.default_theme.background.hex
       wv.scales_page_to_fit = False
@@ -171,9 +191,9 @@ if webview_provider == 'Pythonista':
 
       if self._fullscreen:
         kwargs['hide_title_bar'] = True
-        wv.present('full_screen', **kwargs)
+        close_catcher.present('full_screen', **kwargs)
       else:
-        wv.present()
+        close_catcher.present()
 
     def webview_should_start_load(self, webview, url, nav_type):
       if url.startswith(self.event_prefix):
@@ -213,6 +233,7 @@ elif webview_provider == 'pywebview':
 
       webview.create_window(
         title, url='youey/main-ui-pywebview.html', js_api=Api(self), fullscreen=self._fullscreen, background_color=self.default_theme.background.hex)
+      self.on_app_close()
 
     def eval_js(self, js):
       return webview.evaluate_js(js, 'master')

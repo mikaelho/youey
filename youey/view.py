@@ -42,6 +42,7 @@ class View(JSWrapper, LayoutProperties, StyleProperties, EventProperties):
     parent.add_child(self)
     
     self._js = JSWrapper(self.root.webview).by_id(self.id)
+    self._set_events()
     
     #super().setup()
     self.setup()
@@ -63,6 +64,15 @@ class View(JSWrapper, LayoutProperties, StyleProperties, EventProperties):
     
   def apply_theme(self):
     pass
+    
+  def _set_events(self):
+    for func_name in EventProperties._handler_names:
+      defined_handler = getattr(self, func_name, None)
+      handler_setup = getattr(EventProperties, '_setup_for_'+func_name)
+      if defined_handler:
+        handler_setup.fset(self, defined_handler)
+      else:
+        setattr(type(self), func_name, handler_setup)
     
   def _update_dependencies(self):
     self.root._update_all_dependencies(self)

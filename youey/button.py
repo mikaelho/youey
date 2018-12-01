@@ -23,10 +23,12 @@ class ButtonView(LabelView):
     w,h = self.width, self.height
     center = event['center']
     local_position = self.from_view((center['x'],center['y']))
-    self._js.append("<span class='ripple'></span>")
     x = local_position[0] - w/2
     y = local_position[1] - h/2
     dim = max(w,h)
+    
+    self._js.append("<span class='ripple'></span>")
+
     elem = self._js.by_class('ripple')
     elem.set_style("width", dim)
     elem.set_style("height", dim)
@@ -34,6 +36,7 @@ class ButtonView(LabelView):
     elem.set_style("top", y)
     elem.add_class("rippleEffect")
     elem.evaluate('setTimeout(function() { elem.parentNode.removeChild(elem); }, 500);')
+    
     if hasattr(self, 'on_action') and callable(self.on_action):
       self.on_action(self)
 

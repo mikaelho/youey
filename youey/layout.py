@@ -238,6 +238,7 @@ class PublicLayoutProperties():
     if args:
       value = args[0]
       if value:
+        self._js.set_style('pointerEvents', 'auto')
         self._js.set_style('-webkit-overflow-scrolling', 'touch')
       if not value:
         self._js.set_style('overflow', 'hidden')

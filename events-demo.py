@@ -5,6 +5,12 @@ import random
 
 View.default_theme = Theme(Grey1, Dark)
 
+def basic_action_handler(view):
+  print('Action from', view.id)
+
+def basic_event_handler(event):
+  print('Event', event['type'])
+
 class EventCardView(CardView):
   
   def __init__(self, parent, title, **kwargs):
@@ -15,13 +21,27 @@ class EventCardView(CardView):
   def setup(self):
     super().setup()
     self.inset = View(self).dock_all(5)
-    self.label = LabelView(self, 
+    self.label = LabelView(self.inset, 
       text=self.title).dock_center()
     self.set_colors()
       
   def display_event(self, event):
-    #self.display_label.text = f"Event {event['type']}\nLocation:\n{str(event['center'])}"
     self.set_colors()
+    
+  def alternate_event(self, event):
+    print('Event', event['type'])
+    
+  def rotate_event(self, event):
+    start_rotation = 0
+    if event['type'] == 'rotatestart':
+      start_rotation = event['rotation']
+    else:
+      rotation = event["rotation"]-180- start_rotation
+      self._js.set_style('transform', f'rotate({rotation}deg');
+    
+  def pinch_event(self, event):
+    scale = event["scale"]
+    self._js.set_style('transform', f'scale({scale})');
   
   def set_colors(self):
     bg_color = self.theme.primary if self.primary_color else self.theme.variant
@@ -31,21 +51,29 @@ class EventCardView(CardView):
     self.primary_color = self.primary_color == False
 
 
-class ButtonCardView(CardView):
+class TapCardView(EventCardView):
   
-  def __init__(self, parent, button_class, title, **kwargs):
-    self.button_class = button_class
-    self.title = title
-    super().__init__(parent, **kwargs)
+  def on_tap(self, event):
+    self.set_colors()
+
+class ScrollCardView(EventCardView):
   
   def setup(self):
-    super().setup()
-    self.inset = View(self).dock_all(5)
-    self.button = self.button_class(self, 
+    CardView.setup(self)
+    self.inset = View(self, scrollable=True).dock_all(5)
+    self.large_area = View(self.inset, size = (Height(self, 1.2),)*2).dock_center()
+    self.label = LabelView(self.large_area, 
       text=self.title).dock_center()
+    self.set_colors()
+    '''
+    self.container = ContainerView(self).dock_all()
+    self.image = ImageView(self.container,
+      image='solid:arrows-alt', 
+      fill=self.theme.on_primary,
+      size=(Height(self, 1.1),)*2,
+    ).dock_center()
+    '''
     
-  def click_handler(self, view):
-    print(f'click from {view.id}')
 
 class EventsApp(App):
   
@@ -55,23 +83,42 @@ class EventsApp(App):
     #title='Event Demo', 
     #flow_direction=HORIZONTAL)
       
-    container = ContainerView(self, flow_direction=HORIZONTAL).dock_all()
+    button_container = ContainerView(self, padding=5).dock_top()
     
-    card = ButtonCardView(container, TextButtonView, 'Text')
-    card.button.on_action = card.click_handler
+    button = TextButtonView(button_container, text='Text', center=Width(button_container, 1/4))
+    button.on_action = basic_action_handler
     
-    card = ButtonCardView(container, OutlineButtonView, 'Outline')
+    button = OutlineButtonView(button_container, text='Outline', center=Width(button_container, 2/4))
+    button.on_action = basic_action_handler
     
-    card = ButtonCardView(container, FilledButtonView, 'Filled')
+    button = FilledButtonView(button_container, text='Filled', center=Width(button_container, 3/4))
+    button.on_action = basic_action_handler
+
+    button_container.height = Height(button, offset=11)
+
+    pinch_and_rotate_container = ContainerView(self, flow_direction=HORIZONTAL, height=Height(self, 0.3 if self.is_landscape else 0.25)).dock_bottom()
+
+    card = EventCardView(pinch_and_rotate_container, 'Pinch')
+    card.on_pinch = card.pinch_event
     
-    card = EventCardView(container, 'Tap/click')
-    card.on_tap = card.display_event
+    card = EventCardView(pinch_and_rotate_container, 'Rotate')
+    card.on_rotatestart = card.rotate_event
+    card.on_rotatemove = card.rotate_event
+
+    container = ContainerView(self, flow_direction=HORIZONTAL, top=Bottom(button_container), bottom=Top(pinch_and_rotate_container)).dock_sides()
+
+    card = TapCardView(container, 'Tap/click')
+    #card.on_tap = card.display_event
     
-    card = EventCardView(container, 'Double tap/click')
+    card = EventCardView(container, 'Double\ntap/click')
     card.on_doubletap = card.display_event
     
     card = EventCardView(container, 'Press')
     card.on_press = card.display_event
+    
+    card = EventCardView(container, 'Tap or pan')
+    card.on_tap = card.display_event
+    card.on_pan = card.display_event
     
     card = EventCardView(container, 'Pan')
     card.on_pan = card.display_event
@@ -79,14 +126,11 @@ class EventsApp(App):
     card = EventCardView(container, 'End of pan')
     card.on_panend = card.display_event
     
-    card = EventCardView(container, 'Swipe \n(any direction)')
-    card.on_swipe = card.display_event
-
-    card = EventCardView(container, 'Rotate')
-    card.on_rotate = card.display_event
+    card = EventCardView(container, 'Swipe down')
+    card.on_swipedown = card.display_event
     
-    card = EventCardView(container, 'Pinch\n(whole screen)')
-    container.on_pinch = card.display_event
+    card = ScrollCardView(container, 'Scroll')
+    card.inset.on_scroll = card.display_event
     #print(self.webview.eval_js('document.body.innerHTML;'))
   
 demo_app = EventsApp()

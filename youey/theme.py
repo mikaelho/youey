@@ -234,17 +234,17 @@ class Typography():
   
 class DefaultTypography(Typography):
   #font_family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"'
-  large_title	= '33'
-  title_1	=	'27'
-  title_2	=	'21'
-  title_3	=	'19'
-  headline = '600 16'
-  body	=	'16'
-  callout	=	'15'
-  subhead	=	'14'
-  footnote	=	'12'
-  caption_1	=	'11'
-  caption_2	=	'11'
+  large_title	= '32'
+  title_1	=	'26'
+  title_2	=	'20'
+  title_3	=	'18'
+  headline = '600 15'
+  body	=	'15'
+  callout	=	'14'
+  subhead	=	'13'
+  footnote	=	'11'
+  caption_1	=	'10'
+  caption_2	=	'10'
   
   
 class Look():
