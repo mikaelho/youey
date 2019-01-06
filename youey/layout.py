@@ -1,6 +1,7 @@
 #coding: utf-8
 from youey.util.prop import *
 from youey.constants import *
+from youey.transform import *
 
 def _get(obj, name):
   prop = _prop(obj, name)
@@ -164,6 +165,55 @@ class PublicLayoutProperties():
       self.width, self.height = value
     else:
       return self._getr(SIZE)
+    
+  @prop
+  def transform(self, *args, base_prop):
+    if args:
+      t = args[0]
+      setattr(self, base_prop, t)
+      self._js.set_style('transform', t.to_css())
+    else:
+      return getattr(self, base_prop, Transform())
+      
+  def rotate_by(self, angle_deg):
+    t = self.transform
+    t.rotate_by(angle_deg)
+    self.transform = t
+    
+  def scale_by(self, scale_delta):
+    t = self.transform
+    t.scale_by(scale_delta)
+    self.transform = t
+    
+  @prop
+  def rotation(self, *args, base_prop):
+    if args:
+      angle_deg = args[0]
+      t = self.transform
+      t.unmatrix()
+      current_deg = t.rotation
+      t.rotate_by(-current_deg)
+      t.rotate_by(angle_deg)
+      self.transform = t
+    else:
+      t = self.transform
+      t.unmatrix()
+      return t.rotation
+      
+  @prop
+  def scale(self, *args, base_prop):
+    if args:
+      scale_abs = args[0]
+      t = self.transform
+      t.unmatrix()
+      current_scale = t.scale
+      t.scale_by(-current_scale)
+      t.scale_by(scale_abs)
+      self.transform = t
+    else:
+      t = self.transform
+      t.unmatrix()
+      return t.scale
     
   @property
   def grid_size(self):

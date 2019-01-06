@@ -31,17 +31,21 @@ class EventCardView(CardView):
   def alternate_event(self, event):
     print('Event', event['type'])
     
-  def rotate_event(self, event):
-    start_rotation = 0
-    if event['type'] == 'rotatestart':
-      start_rotation = event['rotation']
-    else:
-      rotation = event["rotation"]-180- start_rotation
-      self._js.set_style('transform', f'rotate({rotation}deg');
+  def rotate_start(self, event):
+    self.prev_rotation = event['rotation']
     
-  def pinch_event(self, event):
-    scale = event["scale"]
-    self._js.set_style('transform', f'scale({scale})');
+  def rotate_move(self, event):
+    rotation_delta = event['rotation']-self.prev_rotation
+    self.prev_rotation = event['rotation']
+    self.rotate_by(rotation_delta)
+    
+  def pinch_start(self, event):
+    self.prev_scale = event['scale']
+    
+  def pinch_move(self, event):
+    scale_delta = 1 + event['scale']-self.prev_scale
+    self.prev_scale = event['scale']
+    self.scale_by(scale_delta)
   
   def set_colors(self):
     bg_color = self.theme.primary if self.primary_color else self.theme.variant
@@ -99,11 +103,12 @@ class EventsApp(App):
     pinch_and_rotate_container = ContainerView(self, flow_direction=HORIZONTAL, height=Height(self, 0.3 if self.is_landscape else 0.25)).dock_bottom()
 
     card = EventCardView(pinch_and_rotate_container, 'Pinch')
-    card.on_pinch = card.pinch_event
+    card.on_pinchstart = card.pinch_start
+    card.on_pinchmove = card.pinch_move
     
     card = EventCardView(pinch_and_rotate_container, 'Rotate')
-    card.on_rotatestart = card.rotate_event
-    card.on_rotatemove = card.rotate_event
+    card.on_rotatestart = card.rotate_start
+    card.on_rotatemove = card.rotate_move
 
     container = ContainerView(self, flow_direction=HORIZONTAL, top=Bottom(button_container), bottom=Top(pinch_and_rotate_container)).dock_sides()
 
