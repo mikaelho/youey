@@ -117,16 +117,15 @@ protocols=['WKNavigationDelegate'])
 
 def userContentController_didReceiveScriptMessage_(_self, _cmd, _userContentController, _message):
   controller_instance = ObjCInstance(_self)
-  #print('script', controller_instance)
   webview = controller_instance._pythonistawebview()
-  deleg = webview.delegate
-  if deleg is not None:
-    wk_message = ObjCInstance(_message)
-    name = str(wk_message.name())
-    content = str(wk_message.body())
-    handler = getattr(deleg, 'on_'+name, None)
-    if handler:
-      handler(content)
+  wk_message = ObjCInstance(_message)
+  name = str(wk_message.name())
+  content = str(wk_message.body())
+  handler = getattr(webview, 'on_'+name, None)
+  if handler:
+    handler(content)
+  else:
+    raise Exception(f'Unhandled message from script - name: {name}, content: {content}')
 	
 CustomMessageHandler = create_objc_class('CustomMessageHandler', A_UIViewController, methods=[
   userContentController_didReceiveScriptMessage_
@@ -138,9 +137,12 @@ class _block_alert_completion(Structure):
   _fields_ = _block_literal_fields()
 
 def webView_runJavaScriptAlertPanelWithMessage_initiatedByFrame_completionHandler_(_self, _cmd, _webview, _message, _frame, _completion_handler):
+  delegate_instance = ObjCInstance(_self)
+  webview = delegate_instance._pythonistawebview()
   message = str(ObjCInstance(_message))
   host = str(ObjCInstance(_frame).request().URL().host())
-  console.alert(host, message, 'OK', hide_cancel_button=True)
+  webview._javascript_alert(host, message)
+  #console.alert(host, message, 'OK', hide_cancel_button=True)
   completion_handler = ObjCInstance(_completion_handler)
   retain_global(completion_handler)
   blk = _block_alert_completion.from_address(_completion_handler)
@@ -156,13 +158,11 @@ class _block_confirm_completion(Structure):
   _fields_ = _block_literal_fields(ctypes.c_bool)
 
 def webView_runJavaScriptConfirmPanelWithMessage_initiatedByFrame_completionHandler_(_self, _cmd, _webview, _message, _frame, _completion_handler):
+  delegate_instance = ObjCInstance(_self)
+  webview = delegate_instance._pythonistawebview()
   message = str(ObjCInstance(_message))
   host = str(ObjCInstance(_frame).request().URL().host())
-  try:
-    console.alert(host, message, 'OK')
-    result = True
-  except KeyboardInterrupt:
-    result = False
+  result = webview._javascript_confirm(host, message)
   completion_handler = ObjCInstance(_completion_handler)
   retain_global(completion_handler)
   blk = _block_confirm_completion.from_address(_completion_handler)
@@ -174,22 +174,16 @@ f.restype = None
 f.encoding = b'v@:@@@@?'
 
 
-# - (void)webView:(WKWebView *)webView runJavaScriptTextInputPanelWithPrompt:(NSString *)prompt defaultText:(NSString *)defaultText initiatedByFrame:(WKFrameInfo *)frame completionHandler:(void (^)(NSString *result))completionHandler;
-
 class _block_text_completion(Structure):
   _fields_ = _block_literal_fields(c_void_p)
 
 def webView_runJavaScriptTextInputPanelWithPrompt_defaultText_initiatedByFrame_completionHandler_(_self, _cmd, _webview, _prompt, _default_text, _frame, _completion_handler):
+  delegate_instance = ObjCInstance(_self)
+  webview = delegate_instance._pythonistawebview()
   prompt = str(ObjCInstance(_prompt))
   default_text = str(ObjCInstance(_default_text))
   host = str(ObjCInstance(_frame).request().URL().host())
-  try:
-    result = console.input_alert(host, prompt, default_text, 'OK')
-  except KeyboardInterrupt:
-    result = None
-  #result_b = NSString(result) if result else None
-  result_b = ns(result)
-  #retain_global(result_b)
+  result = webview._javascript_prompt(host, prompt, default_text)
   completion_handler = ObjCInstance(_completion_handler)
   retain_global(completion_handler)
   blk = _block_text_completion.from_address(_completion_handler)
@@ -231,11 +225,10 @@ class WKWebView(ui.View):
     
     user_content_controller = A_WKUserContentController.new().autorelease()
     #user_content_controller.addScriptMessageHandler_name_(custom_controller, "notify")
-    if hasattr(self, 'delegate'):
-      for key in dir(self.delegate):
-        if key.startswith('on_'):
-          message_name = key[3:]
-          user_content_controller.addScriptMessageHandler_name_(custom_message_handler, message_name)
+    for key in dir(self):
+      if key.startswith('on_'):
+        message_name = key[3:]
+        user_content_controller.addScriptMessageHandler_name_(custom_message_handler, message_name)
     webview_config = A_WKWebViewConfiguration.new().autorelease()
     webview_config.userContentController = user_content_controller
     
@@ -245,6 +238,7 @@ class WKWebView(ui.View):
     
     ui_delegate = CustomUIDelegate.new()
     retain_global(ui_delegate)
+    ui_delegate._pythonistawebview = weakref.ref(self)
     
     self.create_webview(webview_config, nav_delegate, ui_delegate)
     
@@ -323,7 +317,7 @@ class WKWebView(ui.View):
     
   @property
   def scales_page_to_fit(self):
-    return self.webview.getAllowsMagnification()
+    raise NotImplementedError('Not supported on iOS. Use HTML meta headers instead.')
     
   @scales_page_to_fit.setter
   def scales_page_to_fit(self, value):
@@ -371,8 +365,12 @@ if __name__ == '__main__':
       #print('Async JS eval:', value)
       pass
       
+      
+  class MyWebView(WKWebView):
+      
     def on_greeting(self, message):
-      print('Message passed to Python:', message)
+      console.alert(message, 'Message passed to Python', 'OK', hide_cancel_button=True)
+  
   
   html = '''
   <html>
@@ -387,9 +385,8 @@ if __name__ == '__main__':
   <body onload="setTimeout(initialize, 300)">Hello world</body>
   '''
   
-  v = WKWebView(delegate=MyWebViewDelegate())
+  v = MyWebView(delegate=MyWebViewDelegate())
   v.present()
-  v.load_url('http://omz-software.com/pythonista/')
+  v.load_html(html)
+  #v.load_url('http://omz-software.com/pythonista/')
   #v.load_url('file://youey/main-ui.html')
-  #assert v.eval_js('document.body.innerHTML;').strip() == 'Hello world'
-  
