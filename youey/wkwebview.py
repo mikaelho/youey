@@ -1,7 +1,11 @@
 '''
 # WKWebView - modern webview for Pythonista
 
-Webview used to implement the WebView of Pythonista ui module is UIWebView, which has been deprecated starting from iOS 8. This module implements a Python webview API using the current iOS-provided view, WKWebView. Besides being Apple-supported, WKWebView brings other benefits such as better Javascript performance and an official communication channel from Javascript to Python. This implementation of a Python API also has the additional benefit of being inheritable. 
+The underlying component used to implement  ui.WebView in Pythonista is UIWebView, which has been deprecated since iOS 8. This module implements a Python webview API using the current iOS-provided view, WKWebView. Besides being Apple-supported, WKWebView brings other benefits such as better Javascript performance and an official communication channel from Javascript to Python. This implementation of a Python API also has the additional benefit of being inheritable.
+
+Available as a [single file](https://github.com/mikaelho/youey/blob/master/youey/wkwebview.py) on GitHub. Run the file as-is to try out some of the capabilities; check the end of the file for demo code.
+
+Credits: This would not exist without @JonB and @Shinyformica.
 
 ## Basic usage
 
@@ -14,7 +18,7 @@ v.load_html('<body>Hello world</body>')
 v.load_url('http://omz-software.com/pythonista/')
 ```
 
-Delegate methods match the same API as well.
+For compatibility, there is also the same delegate API that ui.WebView has, with `webview_should_start_load` etc. methods.
 
 ## Mismatches with ui.WebView
 
@@ -26,22 +30,73 @@ Here we also provide a synchronous `eval_js` method, which essentially waits for
 
 ### `scales_page_to_fit`
 
+UIWebView had such a property, WKWebView does not. It is likely that I will implement an alternative with script injection.
+
 ## Additional features and notes
 
 ### http allowed
 
-### Swipes for navigation
+Looks like Pythonista has the specific plist entry required to allow fetching non-secure http urls. 
 
-Only for pahes loaded with load_url; for some reason, load_html is ignored.
+### Swipe navigation
+
+There is a new property, `swipe_navigation`, False by default. If set to True, horizontal swipes navigate backwards and forwards in the browsing history.
+
+Note that browsing history is only updated for calls to `load_url` - `load_html` is ignored (Apple feature that has some security justification).
+
+### Data detection
+
+By default, no data detectors are active for WKWebView. If there is demand, it is easy to add support for activating e.g. turning phone numbers automatically into links. 
 
 ### Messages from JS to Python
 
+WKWebView comes with support for JS to container messages. Use this by subclassing WKWebView and implementing methods that start with `on_` and accept one message argument. These methods are then callable from JS with the pithy `window.webkit.messageHandler.<name>.postMessage` call, where `<name>` corresponds to whatever you have on the method name after the `on_` prefix.
+
+Here's a minimal yet working example:
+  
+    class MagicWebView(WKWebView):
+      
+      def on_magic(self, message):
+        print('WKWebView magic ' + message)
+        
+    html = '<body><button onclick="window.webkit.messageHandlers.magic.postMessage(\'spell\')">Cast a spell</button></body>'
+    
+    v = MagicWebView()
+    v.load_html(html)
+    
+Note that the message argument is always a string. For structured data, you need to use e.g. JSON at both ends.
+
+### User scripts a.k.a. script injection
+
+WKWebView supports defining JS scripts that will be automatically loaded with every page. 
+
+Use the `add_script(js_script, add_to_end=True)` method for this.
+
+Scripts are added to all frames. Removing scripts is currently not implemented.
+
 ### Javascript exceptions
 
-### Disable data detection
+WKWebView uses both user scripts and JS-to-Python messaging to report Javascript errors to Python, where the errors are simply printed out.
 
-### Customize JS alerts
+### Customize Javascript popups
 
+Javascript alert, confirm and prompt dialogs are now implemented with simple Pythonista equivalents. If you need something fancier or e.g. internationalization support, subclass WKWebView and re-implement the following methods as needed:
+  
+    def _javascript_alert(self, host, message):
+      console.alert(host, message, 'OK', hide_cancel_button=True)
+      
+    def _javascript_confirm(self, host, message):
+      try:
+        console.alert(host, message, 'OK')
+        return True
+      except KeyboardInterrupt:
+        return False
+      
+    def _javascript_prompt(self, host, prompt, default_text):
+      try:
+        return console.input_alert(host, prompt, default_text, 'OK')
+      except KeyboardInterrupt:
+        return None
 '''
 
 from objc_util import  *
@@ -54,16 +109,14 @@ import queue, weakref, ctypes, functools, time, threading, os, json
 class _block_descriptor (Structure):
   _fields_ = [('reserved', c_ulong), ('size', c_ulong), ('copy_helper', c_void_p), ('dispose_helper', c_void_p), ('signature', c_char_p)]
   
-@staticmethod
 def _block_literal_fields(*arg_types):
   return [('isa', c_void_p), ('flags', c_int), ('reserved', c_int), ('invoke', ctypes.CFUNCTYPE(c_void_p, c_void_p, *arg_types)), ('descriptor', _block_descriptor)]
     
 
 class WKWebView(ui.View):
-  
-  js_logging_script = 'console = new Object(); console.error = function(error) { window.webkit.messageHandlers.javascript_console_message.postMessage(JSON.stringify({ level: "error", content: error})); return false; }; window.onerror = (function(error, url, line, col, errorobj) { console.error("" + error + " (" + url + ", line: " + line + ", column: " + col + ")"); });'
 
   def __init__(self, swipe_navigation=False, **kwargs):
+    self.delegate = None
     super().__init__(**kwargs)
     
     self.eval_js_queue = queue.Queue()
@@ -72,13 +125,13 @@ class WKWebView(ui.View):
     retain_global(custom_message_handler)
     custom_message_handler._pythonistawebview = weakref.ref(self)
     
-    user_content_controller = WKWebView.WKUserContentController.new().autorelease()
+    user_content_controller = self.user_content_controller = WKWebView.WKUserContentController.new().autorelease()
     for key in dir(self):
       if key.startswith('on_'):
         message_name = key[3:]
         user_content_controller.addScriptMessageHandler_name_(custom_message_handler, message_name)
-    console_script = WKWebView.WKUserScript.alloc().initWithSource_injectionTime_forMainFrameOnly_(WKWebView.js_logging_script, 1, True)
-    user_content_controller.addUserScript_(console_script)
+        
+    self.add_script(WKWebView.js_logging_script)
         
     webview_config = WKWebView.WKWebViewConfiguration.new().autorelease()
     webview_config.userContentController = user_content_controller
@@ -91,20 +144,18 @@ class WKWebView(ui.View):
     retain_global(ui_delegate)
     ui_delegate._pythonistawebview = weakref.ref(self)
     
-    self.create_webview(webview_config, nav_delegate, ui_delegate)
-    
-    #print(threading.current_thread(), 'gone')
+    self._create_webview(webview_config, nav_delegate, ui_delegate)
+
     self.swipe_navigation = swipe_navigation
 
   @on_main_thread
-  def create_webview(self, webview_config, nav_delegate, ui_delegate):
+  def _create_webview(self, webview_config, nav_delegate, ui_delegate):
     self.webview = WKWebView.WKWebView.alloc().initWithFrame_configuration_(
       ((0,0), (self.width, self.height)), webview_config).autorelease()
     self.webview.autoresizingMask = 2 + 16 # WH
     self.webview.setNavigationDelegate_(nav_delegate)
     self.webview.setUIDelegate_(ui_delegate)
     self.objc_instance.addSubview_(self.webview) 
-    #print(threading.current_thread(), 'done')
     
   @on_main_thread
   def load_url(self, url):
@@ -149,6 +200,11 @@ class WKWebView(ui.View):
     block = ObjCBlock(handler, restype=None, argtypes=[c_void_p, c_void_p, c_void_p])
     retain_global(block)
     self.webview.evaluateJavaScript_completionHandler_(js, block)
+      
+  def add_script(self, js_script, add_to_end=True):
+    location = 1 if add_to_end else 0
+    wk_script = WKWebView.WKUserScript.alloc().initWithSource_injectionTime_forMainFrameOnly_(js_script, location, False)
+    self.user_content_controller.addUserScript_(wk_script)
       
   @on_main_thread
   def go_back(self):
@@ -197,6 +253,8 @@ class WKWebView(ui.View):
       return console.input_alert(host, prompt, default_text, 'OK')
     except KeyboardInterrupt:
       return None
+      
+  js_logging_script = 'console = new Object(); console.error = function(error) { window.webkit.messageHandlers.javascript_console_message.postMessage(JSON.stringify({ level: "error", content: error})); return false; }; window.onerror = (function(error, url, line, col, errorobj) { console.error("" + error + " (" + url + ", line: " + line + ", column: " + col + ")"); });'
       
   def on_javascript_console_message(self, message):
     log_message = json.loads(message)
@@ -399,17 +457,8 @@ if __name__ == '__main__':
       
     @ui.in_background
     def webview_did_finish_load(self, webview):
-      print('Finished loading')
-      #print('Sync JS eval:', webview.eval_js('document.body.innerHTML;'))
-      webview.eval_js_async('document.body.innerHTML;', self.js_completion)
-      
-    def webview_did_fail_load(self, webview, error_code, error_msg):
-      raise RuntimeError(f'WKWebView load failed with code {error_code}: {error_msg}')
-    
-    def js_completion(self, value):
-      #print('Async JS eval:', value)
-      pass
-      
+      print('Finished loading ' + webview.eval_js('document.title'))
+
       
   class MyWebView(WKWebView):
       
@@ -420,6 +469,7 @@ if __name__ == '__main__':
   html = '''
   <html>
   <head>
+    <title>WKWebView tests</title>
     <script>
       function initialize() {
         result = prompt('Initialized', 'Yes, indeed');
@@ -441,4 +491,6 @@ if __name__ == '__main__':
   v.present()
   v.load_html(html)
   #v.load_url('http://omz-software.com/pythonista/')
-  #v.load_url('file://youey/main-ui.html')
+  #v.load_url('file://some/local/file.html')
+  
+
