@@ -5,7 +5,7 @@ The underlying component used to implement  ui.WebView in Pythonista is UIWebVie
 
 Available as a [single file](https://github.com/mikaelho/youey/blob/master/youey/wkwebview.py) on GitHub. Run the file as-is to try out some of the capabilities; check the end of the file for demo code.
 
-Credits: This would not exist without @JonB and @Shinyformica.
+Credits: This would not exist without @JonB and @mithrendal.
 
 ## Basic usage
 
