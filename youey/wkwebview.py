@@ -162,7 +162,7 @@ class WKWebView(ui.View):
     ''' Loads the contents of the given url
     asynchronously.
     
-    If the url starts with `file://`, loads a local file. If 
+    If the url starts with `file://`, loads a local file. If the remaining url starts with `/`, path starts from Pythonista root.
     '''
     if url.startswith('file://'):
       file_path = url[7:]
