@@ -238,6 +238,16 @@ class WKWebView(ui.View):
   def swipe_navigation(self, value):
     self.webview.setAllowsBackForwardNavigationGestures_(value == True)
     
+  @property
+  def scroll_enabled(self):
+    '''Controls whether scrolling is enabled. 
+    Disabling scrolling is applicable for pages that need to look like an app.'''
+    return self.webview.scrollView().scrollEnabled()
+    
+  @scroll_enabled.setter
+  def scroll_enabled(self, value):
+    self.webview.scrollView().setScrollEnabled_(value == True)
+    
   def _javascript_alert(self, host, message):
     console.alert(host, message, 'OK', hide_cancel_button=True)
     
