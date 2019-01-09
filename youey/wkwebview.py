@@ -435,12 +435,8 @@ class WKWebView(ui.View):
   # Javascript evaluation completion handler
   
   def handle_completion(callback, _cmd, _obj, _err):
-    if callback is None:
-      return
-    js_value = None
-    if _obj != None:
-      js_value = str(ObjCInstance(_obj))
-    callback(js_value)
+    if callback:
+      callback(str(ObjCInstance(_obj)) if _obj else None)
 
 
 if __name__ == '__main__':
@@ -492,5 +488,3 @@ if __name__ == '__main__':
   v.load_html(html)
   #v.load_url('http://omz-software.com/pythonista/')
   #v.load_url('file://some/local/file.html')
-  
-
