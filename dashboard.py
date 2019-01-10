@@ -1,7 +1,7 @@
 #coding: utf-8
 from youey import *
 
-from carnet_login import *
+#from carnet_login import *
 
 from types import SimpleNamespace
   
@@ -14,7 +14,6 @@ class DashboardApp(App):
     super().__init__(**kwargs)
   
   def setup(self):
-    scrollview
     nav = NavigationView(self, title='ZLO', icon='solid:car')#, flow_direction=HORIZONTAL, spread=True)
     
     ImageView(nav.container, image='vw-model-egolf.png').dock_all().left=Width(nav.container, .2)
@@ -25,7 +24,7 @@ class DashboardApp(App):
     
     container = ContainerView(nav.container, flow_direction=HORIZONTAL, spread=True, background_color=semi_transparent_bg).dock_all()
     
-    self.car_data = CarData()
+    #self.car_data = CarData()
     
     dummy_values = {
       'celcius': 10,
@@ -37,7 +36,7 @@ class DashboardApp(App):
       'climateHeatingWindowFrontStatus': 'off',
       'climateHeatingWindowRearStatus': 'off'
     }
-    #self.car_data = SimpleNamespace(**dummy_values)
+    self.car_data = SimpleNamespace(**dummy_values)
     
     cards = [
       ('Lämpötila', 'solid:cloud-sun', str(round(self.car_data.celcius)), '°C'),
