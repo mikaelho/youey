@@ -30,7 +30,7 @@ Here we also provide a synchronous `eval_js` method, which essentially waits for
 
 ### `scales_page_to_fit`
 
-UIWebView had such a property, WKWebView does not. It is likely that I will implement an alternative with script injection.
+UIWebView had such a property, WKWebView does not. See below for the various `disable` methods that can be used instead.
 
 ## Additional features and notes
 
@@ -73,6 +73,22 @@ WKWebView supports defining JS scripts that will be automatically loaded with ev
 Use the `add_script(js_script, add_to_end=True)` method for this.
 
 Scripts are added to all frames. Removing scripts is currently not implemented.
+
+Following two convenience methods are also available:
+  
+* `add_style(css)` to add a style tag containing the given CSS style definition.
+* `add_meta(name, content)` to add a meta tag with the given name and content.
+
+### Making a web page behave more like an app
+
+These methods set various style and meta tags to disable typical web interaction modes:
+  
+* `disable_zoom`
+* `disable_user_selection`
+* `disable_font_resizing`
+* `disable_scrolling` (alias for setting `scroll_enabled` to False)
+
+There is also a convenience method, `disable_all`, which calls all of the above.
 
 ### Javascript exceptions
 
@@ -205,6 +221,43 @@ class WKWebView(ui.View):
     location = 1 if add_to_end else 0
     wk_script = WKWebView.WKUserScript.alloc().initWithSource_injectionTime_forMainFrameOnly_(js_script, location, False)
     self.user_content_controller.addUserScript_(wk_script)
+      
+  def add_style(self, css):
+    "Convenience method to add a style tag with the given css, to every page loaded by the view."
+    css = css.replace("'", "\'")
+    js = f"var style = document.createElement('style');style.innerHTML = '{css}';document.getElementsByTagName('head')[0].appendChild(style);"
+    self.add_script(js, add_to_end=True)
+    
+  def add_meta(self, name, content):
+    "Convenience method to add a meta tag with the given name and content, to every page loaded by the view."
+    name = name.replace("'", "\'")
+    content = content.replace("'", "\'")
+    js = f"var meta = document.createElement('meta'); meta.setAttribute('name', '{name}'); meta.setAttribute('content', '{content}'); document.getElementsByTagName('head')[0].appendChild(meta);"
+    self.add_script(js, add_to_end=True)
+    
+  def disable_zoom(self):
+    name = 'viewport'
+    content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'
+    self.add_meta(name, content)
+    
+  def disable_user_selection(self):
+    css = '* { -webkit-user-select: none; }'
+    self.add_style(css)
+    
+  def disable_font_resizing(self):
+    css = 'body { -webkit-text-size-adjust: none; }'
+    self.add_style(css)
+    
+  def disable_scrolling(self):
+    "Included for consistency with the other `disable_x` methods, this is equivalent to setting `scroll_enabled` to false."
+    self.scroll_enabled = False
+    
+  def disable_all(self):
+    "Convenience method that calls all the `disable_x` methods to make the loaded pages act more like an app."
+    self.disable_zoom()
+    self.disable_scrolling()
+    self.disable_user_selection()
+    self.disable_font_resizing()
       
   @on_main_thread
   def go_back(self):
@@ -495,6 +548,7 @@ if __name__ == '__main__':
   
   v = MyWebView(delegate=MyWebViewDelegate(), swipe_navigation=True)
   v.present()
+  v.disable_all()
   v.load_html(html)
   #v.load_url('http://omz-software.com/pythonista/')
   #v.load_url('file://some/local/file.html')
