@@ -22,21 +22,25 @@ For compatibility, there is also the same delegate API that ui.WebView has, with
 
 ## Mismatches with ui.WebView
 
-### `eval_js` – synchronous vs. asynchronous JS evaluation
+### Synchronous vs. asynchronous JS evaluation
 
-Apple's WKWebView only provides an async Javascript evaliation function. This is available as an `eval_js_async`, with an optional `callback` argument that will called with a single argument containing the result of the JS evaluation (or None).
+Apple's WKWebView only provides an async Javascript evaliation function. This is available as an `eval_js_async` method, with an optional `callback` argument that will be called with a single argument containing the result of the JS evaluation (or None).
 
-Here we also provide a synchronous `eval_js` method, which essentially waits for the callback behind the scenes before returning the result. For this to work, you have to call the method outside the main UI thread, e.g. from a method decorated with `ui.in_background`.
+We also provide a synchronous `eval_js` method, which essentially waits for the callback before returning the result. For this to work, you have to call the `eval_js` method outside the main UI thread, e.g. from a method decorated with `ui.in_background`.
 
-### `scales_page_to_fit`
+### Handling page scaling
 
-UIWebView had such a property, WKWebView does not. See below for the various `disable` methods that can be used instead.
+UIWebView had a property called `scales_page_to_fit`, WKWebView does not. See below for the various `disable` methods that can be used instead.
 
 ## Additional features and notes
 
 ### http allowed
 
 Looks like Pythonista has the specific plist entry required to allow fetching non-secure http urls. 
+
+### Other url schemes
+
+If you try to open a url not natively supported by WKWebView, such as `tel:` for phone numbers, the `webbrowser` module is used to open it.
 
 ### Swipe navigation
 
@@ -46,11 +50,15 @@ Note that browsing history is only updated for calls to `load_url` - `load_html`
 
 ### Data detection
 
-By default, no data detectors are active for WKWebView. If there is demand, it is easy to add support for activating e.g. turning phone numbers automatically into links. 
+By default, no Apple data detectors are active for WKWebView. You can activate them by including one or a tuple of the following values as the `data_detectors` argument to the constructor: NONE, PHONE_NUMBER, LINK, ADDRESS, CALENDAR_EVENT, TRACKING_NUMBER, FLIGHT_NUMBER, LOOKUP_SUGGESTION, ALL.
+
+For example, activating just the phone and link detectors:
+  
+    v = WKWebView(data_detectors=(WKWebView.PHONE_NUMBER, WKWebView.LINK))
 
 ### Messages from JS to Python
 
-WKWebView comes with support for JS to container messages. Use this by subclassing WKWebView and implementing methods that start with `on_` and accept one message argument. These methods are then callable from JS with the pithy `window.webkit.messageHandler.<name>.postMessage` call, where `<name>` corresponds to whatever you have on the method name after the `on_` prefix.
+WKWebView comes with support for JS-to-container messages. Use this by subclassing WKWebView and implementing methods that start with `on_` and accept one message argument. These methods are then callable from JS with the pithy `window.webkit.messageHandler.<name>.postMessage` call, where `<name>` corresponds to whatever you have on the method name after the `on_` prefix.
 
 Here's a minimal yet working example:
   
@@ -90,6 +98,8 @@ These methods set various style and meta tags to disable typical web interaction
 
 There is also a convenience method, `disable_all`, which calls all of the above.
 
+Note that disabling user selection will also disable the automatic data detection of e.g. phone numbers, described earlier.
+
 ### Javascript exceptions
 
 WKWebView uses both user scripts and JS-to-Python messaging to report Javascript errors to Python, where the errors are simply printed out.
@@ -116,8 +126,8 @@ Javascript alert, confirm and prompt dialogs are now implemented with simple Pyt
 '''
 
 from objc_util import  *
-import ui, console
-import queue, weakref, ctypes, functools, time, threading, os, json
+import ui, console, webbrowser
+import queue, weakref, ctypes, functools, time, os, json
 
 
 # Helpers for invoking ObjC function blocks with no return value
@@ -130,8 +140,19 @@ def _block_literal_fields(*arg_types):
     
 
 class WKWebView(ui.View):
+  
+  # Data detector constants
+  NONE = 0
+  PHONE_NUMBER = 1
+  LINK = 1 << 1
+  ADDRESS = 1 << 2
+  CALENDAR_EVENT = 1 << 3
+  TRACKING_NUMBER = 1 << 4
+  FLIGHT_NUMBER = 1 << 5
+  LOOKUP_SUGGESTION = 1 << 6
+  ALL = 18446744073709551615 # NSUIntegerMax
 
-  def __init__(self, swipe_navigation=False, **kwargs):
+  def __init__(self, swipe_navigation=False, data_detectors=NONE, **kwargs):
     self.delegate = None
     super().__init__(**kwargs)
     
@@ -151,6 +172,9 @@ class WKWebView(ui.View):
         
     webview_config = WKWebView.WKWebViewConfiguration.new().autorelease()
     webview_config.userContentController = user_content_controller
+    
+    data_detectors = sum(data_detectors) if type(data_detectors) is tuple else data_detectors
+    webview_config.setDataDetectorTypes_(data_detectors)
     
     nav_delegate = WKWebView.CustomNavigationDelegate.new()
     retain_global(nav_delegate)
@@ -340,16 +364,23 @@ class WKWebView(ui.View):
     
   def webView_decidePolicyForNavigationAction_decisionHandler_(_self, _cmd, _webview, _navigation_action, _decision_handler):
     delegate_instance = ObjCInstance(_self)
-    #print('decision', delegate_instance)
     webview = delegate_instance._pythonistawebview()
     deleg = webview.delegate
+    nav_action = ObjCInstance(_navigation_action)
+    ns_url = nav_action.request().URL()
+    url = str(ns_url)
+    nav_type = int(nav_action.navigationType())
+    
     allow = True
     if deleg is not None:
       if hasattr(deleg, 'webview_should_start_load'):
-        nav_action = ObjCInstance(_navigation_action)
-        url = str(nav_action.request().URL())
-        nav_type = int(nav_action.navigationType())
         allow = deleg.webview_should_start_load(webview, url, nav_type)
+    
+    scheme = str(ns_url.scheme())
+    if not WKWebView.WKWebView.handlesURLScheme_(scheme):
+      allow = False
+      webbrowser.open(url)
+    
     allow_or_cancel = 1 if allow else 0
     decision_handler = ObjCInstance(_decision_handler)
     retain_global(decision_handler)
@@ -385,11 +416,11 @@ class WKWebView(ui.View):
     delegate_instance = ObjCInstance(_self)
     webview = delegate_instance._pythonistawebview()
     deleg = webview.delegate
+    err = ObjCInstance(_error)
+    error_code = int(err.code())
+    error_msg = str(err.localizedDescription())
     if deleg is not None:
       if hasattr(deleg, 'webview_did_fail_load'):
-        err = ObjCInstance(_error)
-        error_code = int(err.code())
-        error_msg = str(err.localizedDescription())
         deleg.webview_did_fail_load(webview, error_code, error_msg)
         return
     raise RuntimeError(f'WKWebView load failed with code {error_code}: {error_msg}')
@@ -532,7 +563,9 @@ if __name__ == '__main__':
     <script>
       function initialize() {
         result = prompt('Initialized', 'Yes, indeed');
-        window.webkit.messageHandlers.greeting.postMessage(result ? result : "<Dialog cancelled>");
+        if (result) {
+          window.webkit.messageHandlers.greeting.postMessage(result ? result : "<Dialog cancelled>");
+        }
       }
     </script>
   </head>
@@ -543,12 +576,18 @@ if __name__ == '__main__':
     <p>
       <a href="http://omz-software.com/pythonista/">Pythonista home page</a>
     </p>
+    <p>
+      +358 40 1234567
+    </p>
+    <p>
+      http://omz-software.com/pythonista/
+    </p>
   </body>
   '''
   
-  v = MyWebView(delegate=MyWebViewDelegate(), swipe_navigation=True)
+  v = MyWebView(delegate=MyWebViewDelegate(), swipe_navigation=True, data_detectors=(WKWebView.PHONE_NUMBER,WKWebView.LINK))
   v.present()
-  v.disable_all()
+  #v.disable_all()
   v.load_html(html)
   #v.load_url('http://omz-software.com/pythonista/')
   #v.load_url('file://some/local/file.html')
