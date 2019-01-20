@@ -60,7 +60,7 @@ For example, activating just the phone and link detectors:
 
 WKWebView comes with support for JS-to-container messages. Use this by subclassing WKWebView and implementing methods that start with `on_` and accept one message argument. These methods are then callable from JS with the pithy `window.webkit.messageHandler.<name>.postMessage` call, where `<name>` corresponds to whatever you have on the method name after the `on_` prefix.
 
-Here's a minimal yet working example:
+Here's a minimal example:
   
     class MagicWebView(WKWebView):
       
@@ -72,7 +72,7 @@ Here's a minimal yet working example:
     v = MagicWebView()
     v.load_html(html)
     
-Note that the message argument is always a string. For structured data, you need to use e.g. JSON at both ends.
+Note that JS postMessage must have a parameter, and the message argument to the Python handler is always a string version of that parameter. For structured data, you need to use e.g. JSON at both ends.
 
 ### User scripts a.k.a. script injection
 
@@ -152,8 +152,120 @@ class WKWebView(ui.View):
   LOOKUP_SUGGESTION = 1 << 6
   ALL = 18446744073709551615 # NSUIntegerMax
 
-  def __init__(self, swipe_navigation=False, data_detectors=NONE, **kwargs):
+  class Console(ui.View):
+    
+    def __init__(self, webview, **kwargs):
+      super().__init__(**kwargs)
+      self.webview = webview
+      self.textview = ui.TextView(frame=self.bounds, flex='WH', background_color='#e5e5e5', text_color='black', border_color='black', border_width=1, editable=False)
+      self.add_subview(self.textview)
+      
+      radius = 20
+      self.eval_button = b = ui.Button(flex='TL',
+        background_color='grey', 
+        border_color='white',
+        border_width=1,
+        tint_color='white')
+      b.image=ui.Image('iob:chevron_right_32')
+      b.frame=(self.width-5.5*radius, self.height-3*radius, 2*radius, 2*radius)
+      b.corner_radius=radius
+      b.action = self.begin_js_editing
+      #b.width = b.height = radius
+      self.add_subview(self.eval_button)
+    
+    def message(self, message):
+      level, content = message['level'], message['content']
+      if level == 'code':
+        self.textview.text += '>>> ' + content + '\n'
+      elif level == 'raw':
+        self.textview.text += content + '\n'
+      else:
+        self.textview.text += level.upper() + ': ' + content + '\n'
+      
+      offset_y = self.textview.content_size[1] - self.textview.height
+      print(offset_y)
+      offset_y = max(0, offset_y)
+      print(offset_y)
+      
+      offset_x = self.textview.content_offset[0]
+      self.textview.content_offset = (offset_x, 100)
+      print(self.textview.content_offset)
+      print(self.textview.content_size[1])
+      
+      #scrollview = self.textview.objc_instance #.scrollView()
+      #print(dir(self.textview))
+      #content_height = scrollView.contentSize.height
+        
+    def begin_js_editing(self, sender):
+      self.webview.hidden_input.begin_editing()
+      self.webview.entry_view.begin_editing()
+      
+  class EntryBar(ui.View):
+    
+    def __init__(self, webview, flex='WH', **kwargs):
+      super().__init__(flex, **kwargs)
+      self.webview = webview
+      
+      NSBundle = ObjCClass('NSBundle')
+      bundle = NSBundle.bundleWithIdentifier_('com.apple.UIKit')
+      cancel_str = str(bundle.localizedStringForKey_value_table_('Cancel', '', None))
+      
+      c = self.cancel_button = ui.Button(
+        title=cancel_str,
+        font=('<System-Bold>', 16),
+        y=0,
+        #tint_color='blue',
+        action=self.edit_cancelled)
+      c.size_to_fit()
+      c.flex='L'
+      c.width += 20
+      c.x = self.width - c.width
+      c.y = (self.height - c.height)/2
+        
+      e = self.eval_js_input = ui.TextField(
+        placeholder='>>>',
+        y=0,
+        #flex='WH',
+        tint_color='black',
+        spellchecking_type=False,
+        autocapitalization_type=ui.AUTOCAPITALIZE_NONE,
+        autocorrection_type=False,
+        clear_button_mode='always', 
+        action=self.edit_done)
+      e.size_to_fit()
+      e.flex='W'
+      e.x = 10
+      e.width = self.width - c.width - 20
+      e.height = self.height-10
+      e.y = (self.height - e.height)/2
+        
+      self.add_subview(self.eval_js_input)
+      self.add_subview(self.cancel_button)
+      
+    def layout(self):
+      toolbar_size = self.webview.keyboardToolbar.frame().size
+      insets = self.objc_instance.safeAreaInsets()
+      self.x = insets.left
+      self.width = toolbar_size.width - insets.left - insets.right
+      
+    def begin_editing(self):
+      self.eval_js_input.begin_editing()
+      
+    def edit_done(self, sender):
+      js = self.eval_js_input.text.strip()
+      if js != '':
+        self.webview.eval_js_async(js)
+        self.eval_js_input.text = ''
+      ui.delay(self.webview.hidden_input.end_editing, 0.01)
+
+    def edit_cancelled(self, sender):
+      self.eval_js_input.text = ''
+      self.eval_js_input.end_editing()
+
+  def __init__(self, swipe_navigation=False, data_detectors=NONE, show_console_button=False, show_js_eval_button=False, show_console=False, console_share=0.5, log_js_evals=False, respect_safe_areas=True, **kwargs):
     self.delegate = None
+    self.log_js_evals = log_js_evals
+    self.respect_safe_areas = respect_safe_areas
     super().__init__(**kwargs)
     
     self.eval_js_queue = queue.Queue()
@@ -174,6 +286,11 @@ class WKWebView(ui.View):
     webview_config.userContentController = user_content_controller
     
     data_detectors = sum(data_detectors) if type(data_detectors) is tuple else data_detectors
+    
+    # Must be set to True to get real js 
+    # errors, in combination with setting a
+    # base directory in the case of load_html
+    webview_config.preferences().setValue_forKey_(True, 'allowFileAccessFromFileURLs')
     webview_config.setDataDetectorTypes_(data_detectors)
     
     nav_delegate = WKWebView.CustomNavigationDelegate.new()
@@ -187,6 +304,14 @@ class WKWebView(ui.View):
     self._create_webview(webview_config, nav_delegate, ui_delegate)
 
     self.swipe_navigation = swipe_navigation
+    self._create_js_eval_view()
+    self._create_js_console_view(console_share)
+    self._create_js_buttons(show_console_button or show_js_eval_button, show_js_eval_button)
+    
+    if show_console:
+      self.reveal_console(None)
+    else:
+      self.hide_console(None)
 
   @on_main_thread
   def _create_webview(self, webview_config, nav_delegate, ui_delegate):
@@ -196,6 +321,54 @@ class WKWebView(ui.View):
     self.webview.setNavigationDelegate_(nav_delegate)
     self.webview.setUIDelegate_(ui_delegate)
     self.objc_instance.addSubview_(self.webview) 
+    
+  def _create_js_console_view(self, console_share):
+    self.console = WKWebView.Console(self, frame=self.bounds, flex='WHT', background_color=(.76, .76, .76), hidden=True)
+    self.console.height = self.height * console_share
+    self.console.y = self.height * (1-console_share)
+    self.console.message({'level': 'info', 'content': 'Console initialized'})
+    self.add_subview(self.console)
+    
+  def _create_js_eval_view(self):  
+    self.keyboardToolbar = ObjCClass('UIToolbar').alloc().init()
+    self.keyboardToolbar.sizeToFit()
+    self.keyboardToolbar.items = [] # Need this for Cancel button to work
+    
+    b = self.keyboardToolbar.bounds()
+    o = b.origin
+    s = b.size
+    self.entry_view = WKWebView.EntryBar(
+      self,
+      frame=(o.x, o.y, s.width, s.height))
+    self.keyboardToolbar.addSubview_(self.entry_view.objc_instance)
+    
+    self.hidden_input = ui.TextView(
+      hidden=True)
+    self.hidden_input.objc_instance.inputAccessoryView = self.keyboardToolbar
+    self.add_subview(self.hidden_input)
+    
+  def _js_edit_done(self, sender):
+    js = sender.text
+    self.hidden_input.end_editing()
+    
+  def _create_js_buttons(self, show_console_button, show_js_eval_button):
+    radius = 20
+    
+    self.console_button = b = ui.Button(flex='TL',
+      background_color='grey', 
+      border_color='white',
+      border_width=1,
+      tint_color='white',
+      hidden=(show_console_button==False))
+    b.image=ui.Image('iob:chevron_up_32')
+    b.frame=(self.width-3*radius, self.height-3*radius, 2*radius, 2*radius)
+    b.corner_radius=radius
+    #b.width = b.height = radius
+    self.add_subview(self.console_button)
+    
+  def layout(self):
+    if self.respect_safe_areas:
+      self.update_safe_area_insets()
     
   @on_main_thread
   def load_url(self, url):
@@ -221,7 +394,12 @@ class WKWebView(ui.View):
   
   @on_main_thread
   def load_html(self, html):
-    self.webview.loadHTMLString_baseURL_(html, None)
+    # Need to set a base directory to get
+    # real js errors
+    current_working_directory = os.path.dirname(os.getcwd())
+    root_dir = NSURL.fileURLWithPath_(current_working_directory)
+    #root_dir = NSURL.fileURLWithPath_(os.path.expanduser('~'))
+    self.webview.loadHTMLString_baseURL_(html, root_dir)
     
   def eval_js(self, js):
     self.eval_js_async(js, self._eval_js_sync_callback)
@@ -236,7 +414,9 @@ class WKWebView(ui.View):
     
   @on_main_thread
   def eval_js_async(self, js, callback=None):
-    handler = functools.partial(WKWebView.handle_completion, callback)
+    if self.log_js_evals:
+      self.console.message({'level': 'code', 'content': js})
+    handler = functools.partial(WKWebView._handle_completion, callback, self)
     block = ObjCBlock(handler, restype=None, argtypes=[c_void_p, c_void_p, c_void_p])
     retain_global(block)
     self.webview.evaluateJavaScript_completionHandler_(js, block)
@@ -301,11 +481,11 @@ class WKWebView(ui.View):
     
   @property
   def scales_page_to_fit(self):
-    raise NotImplementedError('Not supported on iOS. Use HTML meta headers instead.')
+    raise NotImplementedError('Not supported on iOS. Use the "disable_" methods instead.')
     
   @scales_page_to_fit.setter
   def scales_page_to_fit(self, value):
-    raise NotImplementedError('Not supported on iOS. Use HTML meta headers instead.')
+    raise NotImplementedError('Not supported on iOS. Use the "disable_" methods instead.')
     
   @property
   def swipe_navigation(self):
@@ -324,6 +504,25 @@ class WKWebView(ui.View):
   @scroll_enabled.setter
   def scroll_enabled(self, value):
     self.webview.scrollView().setScrollEnabled_(value == True)
+    
+  def reveal_console(self, sender):
+    self.console.hidden = False
+    self.webview.setFrame_(((0,0),(self.width,self.height-self.console.height)))
+    self.console_button.image = ui.Image('iob:chevron_down_32')
+    self.console_button.action = self.hide_console
+    
+  def hide_console(self, sender):
+    self.console.hidden = True
+    self.webview.setFrame_(((0,0),(self.width,self.height)))
+    self.console_button.image = ui.Image('iob:chevron_up_32')
+    self.console_button.action = self.reveal_console
+    
+  def reveal_js_eval_view(self, sender):
+    pass
+    
+  def update_safe_area_insets(self):
+    insets = self.objc_instance.safeAreaInsets()
+    self.frame = self.frame.inset(insets.top, insets.left, insets.bottom, insets.right)
     
   def _javascript_alert(self, host, message):
     console.alert(host, message, 'OK', hide_cancel_button=True)
@@ -345,9 +544,7 @@ class WKWebView(ui.View):
       
   def on_javascript_console_message(self, message):
     log_message = json.loads(message)
-    if log_message['level'] == 'error':
-      print('JavaScript error:\n' + log_message['content'])
-    
+    self.console.message(log_message)  
     
   WKWebView = ObjCClass('WKWebView')
   UIViewController = ObjCClass('UIViewController')
@@ -528,9 +725,12 @@ class WKWebView(ui.View):
   
   # Javascript evaluation completion handler
   
-  def handle_completion(callback, _cmd, _obj, _err):
+  def _handle_completion(callback, webview, _cmd, _obj, _err):
+    result = str(ObjCInstance(_obj)) if _obj else None
+    if webview.log_js_evals:
+      webview.console.message({'level': 'raw', 'content': str(result)})
     if callback:
-      callback(str(ObjCInstance(_obj)) if _obj else None)
+      callback(result)
 
 
 if __name__ == '__main__':
@@ -585,8 +785,10 @@ if __name__ == '__main__':
   </body>
   '''
   
-  v = MyWebView(delegate=MyWebViewDelegate(), swipe_navigation=True, data_detectors=(WKWebView.PHONE_NUMBER,WKWebView.LINK))
+  v = MyWebView(delegate=MyWebViewDelegate(), swipe_navigation=True, data_detectors=(WKWebView.PHONE_NUMBER,WKWebView.LINK), show_js_eval_button=True, show_console=True, log_js_evals=True)
+
   v.present()
+  
   #v.disable_all()
   v.load_html(html)
   #v.load_url('http://omz-software.com/pythonista/')
