@@ -100,9 +100,40 @@ There is also a convenience method, `disable_all`, which calls all of the above.
 
 Note that disabling user selection will also disable the automatic data detection of e.g. phone numbers, described earlier.
 
-### Javascript exceptions
+### Javascript debugging
 
-WKWebView uses both user scripts and JS-to-Python messaging to report Javascript errors to Python, where the errors are simply printed out.
+Javascript errors and console messages are sent to Python side and printed to Pythonista console. Supported JS console methods are `log`, `info`, `warn` and `error`.
+
+For further JS debugging and experimentation, there is a simple convenience command-line utility that can be used to evaluate load URLs and evaluate javascript. If you `present` your app as a 'panel', you can easily switch between the tabs for your web page and this console.
+
+Or you can just create a WKWebView manually for quick experimentation, like in the usage example below. 
+
+    >>> from wkwebview import *
+    >>> v = WKWebView(name='Demo')
+    >>> WKWebView.console()
+    Welcome to WKWebView console. Evaluate javascript in any active WKWebView. Special commands: list, switch #, load <url>, quit
+    js> list
+    0 - Demo - 
+    js> load http://omz-software.com/pythonista/
+    js> list
+    0 - Demo - Pythonista for iOS
+    js> document.title
+    Pythonista for iOS
+    js> quit
+    >>> v2 = WKWebView(name='Other view')
+    >>> WKWebView.console()
+    Welcome to WKWebView console. Evaluate javascript in any active WKWebView. Special commands: list, switch #, load <url>, quit
+    js> list
+    0 - Demo - Pythonista for iOS
+    1 - Other view - 
+    js> switch 1
+    js> load https://www.python.org
+    js> document.title
+    Welcome to Python.org
+    js> window.doesNotExist.wrongFunction()
+    ERROR: TypeError: undefined is not an object (evaluating 'window.doesNotExist.wrongFunction') (https://www.python.org/, line: 1, column: 20)
+    None
+    js> quit
 
 ### Customize Javascript popups
 
@@ -126,7 +157,7 @@ Javascript alert, confirm and prompt dialogs are now implemented with simple Pyt
 '''
 
 from objc_util import  *
-import ui, console, webbrowser, editor, console
+import ui, console, webbrowser
 import queue, weakref, ctypes, functools, time, os, json, re
 from types import SimpleNamespace
 
@@ -156,175 +187,8 @@ class WKWebView(ui.View):
   # Global webview index for console
   webviews = []
 
-  class Theme:
+  def __init__(self, swipe_navigation=False, data_detectors=NONE, log_js_evals=False, respect_safe_areas=False, **kwargs):
     
-    @classmethod
-    def get_theme(cls):
-      theme_dict = json.loads(cls.clean_json(cls.get_theme_data()))
-      theme = SimpleNamespace(**theme_dict)
-      theme.dict = theme_dict
-      return theme
-    
-    @classmethod
-    def get_theme_data(cls):
-      # Name of current theme
-      defaults = ObjCClass("NSUserDefaults").standardUserDefaults()
-      name = str(defaults.objectForKey_("ThemeName"))
-      # Theme is user-created
-      if name.startswith("User:"):
-        home = os.getenv("CFFIXED_USER_HOME")
-        user_themes_path = os.path.join(home,
-          "Library/Application Support/Themes")
-        theme_path = os.path.join(user_themes_path, name[5:] + ".json")
-      # Theme is built-in
-      else:
-        res_path = str(ObjCClass("NSBundle").mainBundle().resourcePath())
-        theme_path = os.path.join(res_path, "Themes2/%s.json" % name)
-      # Read theme file
-      with open(theme_path, "r") as f:
-        data = f.read()
-      # Return contents
-      return data
-        
-    @classmethod
-    def clean_json(cls, string):
-      # From http://stackoverflow.com/questions/23705304
-      string = re.sub(",[ \t\r\n]+}", "}", string)
-      string = re.sub(",[ \t\r\n]+\]", "]", string)
-      return string
-
-  class Console(ui.View):
-    
-    def __init__(self, webview, **kwargs):
-      super().__init__(**kwargs)
-      self.webview = webview
-      t = webview.theme
-      self.textview = ui.TextView(frame=self.bounds, 
-        flex='WH', 
-        background_color=t.background, 
-        text_color=t.default_text,
-        editable=False)
-      font = t.dict.get('font-family', None)
-      font_size = t.dict.get('font-size', None)
-      if font and font_size:
-        self.textview.font = (font, font_size-2)
-      self.separator = ui.View(frame=(0,0,self.width,1),
-        flex='W',
-        background_color=t.gutter_border)
-      self.add_subview(self.textview)
-      self.add_subview(self.separator)
-      
-      radius = 18
-      self.eval_button = b = ui.Button(flex='TL')
-      b.image=ui.Image('iob:ios7_arrow_right_32')
-      b.frame=(self.width-5.5*radius, self.height-3*radius, 2*radius, 2*radius)
-      b.corner_radius=radius
-      b.action = self.begin_js_editing
-      b.background_color = t.library_background
-      b.tint_color=t.default_text
-      
-      #b.width = b.height = radius
-      self.add_subview(self.eval_button)
-    
-    @on_main_thread
-    def message(self, message):
-      level, content = message['level'], message['content']
-      if level == 'code':
-        self.textview.text += '>>> ' + content + '\n'
-      elif level == 'raw':
-        self.textview.text += content + '\n'
-      else:
-        self.textview.text += level.upper() + ': ' + content + '\n'
-      ui.delay(self.scroll_to_bottom, 0.01)
-      
-    @on_main_thread
-    def scroll_to_bottom(self):
-      w,h = self.textview.content_size
-      self.textview.objc_instance.scrollRectToVisible_animated_(((0, h-10), (10,10)), False)
-        
-    def begin_js_editing(self, sender):
-      self.textview.begin_editing()
-      self.webview.entry_view.begin_editing()
-      
-  class EntryBar(ui.View):
-    
-    def __init__(self, webview, flex='WH', **kwargs):
-      super().__init__(flex, **kwargs)
-      self.webview = webview
-      t = webview.theme
-      #self.background_color = t.bar_background
-      
-      NSBundle = ObjCClass('NSBundle')
-      bundle = NSBundle.bundleWithIdentifier_('com.apple.UIKit')
-      cancel_str = str(bundle.localizedStringForKey_value_table_('Cancel', '', None))
-      
-      c = self.cancel_button = ui.Button(
-        title=cancel_str,
-        #font=('<System-Bold>', 16),
-        tint_color=t.tint,
-        y=0,
-        #tint_color='blue',
-        action=self.edit_cancelled,
-        hidden=True)
-      c.size_to_fit()
-      c.flex='L'
-      c.width += 20
-      c.x = self.width - c.width
-      c.y = (self.height - c.height)/2
-        
-      e = self.eval_js_input = ui.TextField(
-        placeholder='>>>',
-        y=0,
-        #flex='WH',
-        #tint_color='black',
-        border=False,
-        keyboard_type=ui.KEYBOARD_ASCII,
-        background_color=t.background,
-        text_color=t.default_text,
-        spellchecking_type=False,
-        autocapitalization_type=ui.AUTOCAPITALIZE_NONE,
-        autocorrection_type=False,
-        clear_button_mode='always', 
-        action=self.edit_evaluate)
-      e.size_to_fit()
-      e.flex='W'
-      e.x = 10
-      e.width = self.width - c.width - 20
-      e.height = self.height-10
-      e.y = (self.height - e.height)/2
-      editor.apply_ui_theme(e)
-      #e.objc_instance.subviews()[0].setKeyboardType_(1)
-      #e.objc_instance.setSmartQuotesType_(1)
-      if hasattr(t, 'dark_keyboard') and t.dark_keyboard:
-        e.objc_instance.subviews()[0].setKeyboardAppearance_(1)
-      else:
-        e.objc_instance.subviews()[0].setKeyboardAppearance_(2)
- 
-      self.add_subview(self.eval_js_input)
-      self.add_subview(self.cancel_button)
-      
-    def layout(self):
-      toolbar_size = self.webview.keyboardToolbar.frame().size
-      insets = self.objc_instance.safeAreaInsets()
-      self.x = insets.left
-      self.width = toolbar_size.width - insets.left - insets.right
-      
-    def begin_editing(self):
-      self.eval_js_input.begin_editing()
-      
-    def edit_evaluate(self, sender):
-      js = self.eval_js_input.text.strip()
-      if js != '':
-        self.webview.eval_js_async(js)
-        self.eval_js_input.text = ''
-      #ui.delay(self.webview.console.textview.end_editing, 0.01)
-
-    def edit_cancelled(self, sender):
-      self.eval_js_input.text = ''
-      self.eval_js_input.end_editing()
-
-  def __init__(self, swipe_navigation=False, data_detectors=NONE, show_console_button=False, show_js_eval_button=False, show_console=False, console_vertical=True, console_share=0.5, log_js_evals=False, respect_safe_areas=False, **kwargs):
-    self.theme = WKWebView.Theme.get_theme()
     WKWebView.webviews.append(self)
     self.delegate = None
     self.log_js_evals = log_js_evals
@@ -364,25 +228,9 @@ class WKWebView(ui.View):
     retain_global(ui_delegate)
     ui_delegate._pythonistawebview = weakref.ref(self)
     
-    self._container = ui.View(
-      frame=self.bounds, flex='WH')
-    self.add_subview(self._container)
-    
     self._create_webview(webview_config, nav_delegate, ui_delegate)
-    self._create_js_console_view(console_vertical, console_share)
     
     self.swipe_navigation = swipe_navigation
-    self._create_js_eval_view()
-    self._create_js_buttons(show_console_button or show_js_eval_button, show_js_eval_button)
-    
-    if show_console:
-      self.reveal_console(None)
-    else:
-      self.hide_console(None)
-
-  def will_close(self):
-    # Will crash if presented without this
-    self.console.textview.end_editing()
 
   @on_main_thread
   def _create_webview(self, webview_config, nav_delegate, ui_delegate):
@@ -391,66 +239,11 @@ class WKWebView(ui.View):
     self.webview.autoresizingMask = 2 + 16 # WH
     self.webview.setNavigationDelegate_(nav_delegate)
     self.webview.setUIDelegate_(ui_delegate)
-    self._container.objc_instance.addSubview_(self.webview) 
-    
-  def _create_js_console_view(self, console_vertical, console_share):
-    self.console = WKWebView.Console(self, 
-      frame=self.bounds, flex='WHT', 
-      hidden=True)
-    self.console.height = self.height * console_share
-    self.console.y = self.height * (1-console_share)
-    self.console.message({'level': 'info', 'content': 'Console initialized'})
-    self._container.add_subview(self.console)
-    
-  def _adjust_console_share(self):
-    pass
-    
-  def _create_js_eval_view(self):  
-    self.keyboardToolbar = ObjCClass('UIToolbar').alloc().init()
-    retain_global(self.keyboardToolbar)
-    self.keyboardToolbar.sizeToFit()
-    
-    b = self.keyboardToolbar.bounds()
-    o = b.origin
-    s = b.size
-    self.entry_view = WKWebView.EntryBar(
-      self,
-      frame=(o.x, o.y, s.width, s.height))
-    
-    flex = ObjCClass('UIBarButtonItem').alloc().initWithBarButtonSystemItem_target_action_(5, None, None)
-    doneBarButton = ObjCClass('UIBarButtonItem').alloc().initWithBarButtonSystemItem_target_action_(0, self.entry_view.eval_js_input.objc_instance, sel('endEditing:'))
-    
-    self.keyboardToolbar.items = [flex, doneBarButton]
-    self.keyboardToolbar.addSubview_(self.entry_view.objc_instance)
-    retain_global(self.entry_view)
-    self.console.textview.objc_instance.inputAccessoryView = self.keyboardToolbar
-    
-  def _create_js_buttons(self, show_console_button, show_js_eval_button):
-    radius = 18
-    
-    self.console_button = b = ui.Button(flex='TL',
-      background_color=self.theme.library_background,
-      tint_color=self.theme.default_text,
-      hidden=(show_console_button==False))
-    b.image=ui.Image('iob:ios7_arrow_up_32')
-    b.frame=(self.width-3*radius, self.height-3*radius, 2*radius, 2*radius)
-    b.corner_radius=radius
-    #b.width = b.height = radius
-    self.add_subview(self.console_button)
+    self.objc_instance.addSubview_(self.webview)
     
   def layout(self):
     if self.respect_safe_areas:
       self.update_safe_area_insets()
-    
-  def keyboard_frame_did_change(self, frame):
-    if not self.on_screen:
-      return
-    keyb_frame = ui.convert_rect(frame, to_view=self)
-    intersection = keyb_frame.intersection(self.frame)
-    if intersection.height == 0:
-      self._container.height = self.height
-    else:
-      self._container.height = intersection.y
     
   @on_main_thread
   def load_url(self, url):
@@ -596,20 +389,6 @@ class WKWebView(ui.View):
   def scroll_enabled(self, value):
     self.webview.scrollView().setScrollEnabled_(value == True)
     
-  def reveal_console(self, sender):
-    self.console.hidden = False
-    self.webview.setFrame_(((0,0),(self._container.width,self._container.height-self.console.height)))
-    self.webview.autoresizingMask = 2 + 16 + (1<<5) # WHB
-    self.console_button.image = ui.Image('iob:ios7_arrow_down_32')
-    self.console_button.action = self.hide_console
-    
-  def hide_console(self, sender):
-    self.console.hidden = True
-    self.webview.setFrame_(((0,0),(self._container.width,self._container.height)))
-    self.webview.autoresizingMask = 2 + 16 # WH
-    self.console_button.image = ui.Image('iob:ios7_arrow_up_32')
-    self.console_button.action = self.reveal_console
-    
   def update_safe_area_insets(self):
     insets = self.objc_instance.safeAreaInsets()
     self.frame = self.frame.inset(insets.top, insets.left, insets.bottom, insets.right)
@@ -646,10 +425,52 @@ class WKWebView(ui.View):
     else:
       print(level.upper() + ': ' + content)
       
+  class Theme:
+    
+    @classmethod
+    def get_theme(cls):
+      theme_dict = json.loads(cls.clean_json(cls.get_theme_data()))
+      theme = SimpleNamespace(**theme_dict)
+      theme.dict = theme_dict
+      return theme
+    
+    @classmethod
+    def get_theme_data(cls):
+      # Name of current theme
+      defaults = ObjCClass("NSUserDefaults").standardUserDefaults()
+      name = str(defaults.objectForKey_("ThemeName"))
+      # Theme is user-created
+      if name.startswith("User:"):
+        home = os.getenv("CFFIXED_USER_HOME")
+        user_themes_path = os.path.join(home,
+          "Library/Application Support/Themes")
+        theme_path = os.path.join(user_themes_path, name[5:] + ".json")
+      # Theme is built-in
+      else:
+        res_path = str(ObjCClass("NSBundle").mainBundle().resourcePath())
+        theme_path = os.path.join(res_path, "Themes2/%s.json" % name)
+      # Read theme file
+      with open(theme_path, "r") as f:
+        data = f.read()
+      # Return contents
+      return data
+        
+    @classmethod
+    def clean_json(cls, string):
+      # From http://stackoverflow.com/questions/23705304
+      string = re.sub(",[ \t\r\n]+}", "}", string)
+      string = re.sub(",[ \t\r\n]+\]", "]", string)
+      return string
+      
   @classmethod
-  def jsprompt(self, webview_index=0):
+  def console(self, webview_index=0):
     webview = WKWebView.webviews[webview_index]
-    console.set_color(*ui.parse_color(webview.theme.tint)[:3])
+    theme = WKWebView.Theme.get_theme()
+    
+    print('Welcome to WKWebView console.')
+    print('Evaluate javascript in any active WKWebView.')
+    print('Special commands: list, switch #, load <url>, quit')
+    console.set_color(*ui.parse_color(theme.tint)[:3])
     while True:
       value = input('js> ').strip()
       if value == 'quit':
@@ -666,7 +487,10 @@ class WKWebView(ui.View):
         webview.load_url(url)
       else:
         print(webview.eval_js(value))
-    console.set_color(*ui.parse_color(webview.theme.default_text)[:3])
+    console.set_color(*ui.parse_color(theme.default_text)[:3])
+    
+    
+  # MAIN OBJC SECTION
     
   WKWebView = ObjCClass('WKWebView')
   UIViewController = ObjCClass('UIViewController')
@@ -674,7 +498,6 @@ class WKWebView(ui.View):
   WKUserContentController = ObjCClass('WKUserContentController')
   NSURLRequest = ObjCClass('NSURLRequest')
   WKUserScript = ObjCClass('WKUserScript')
-
     
   # Navigation delegate
     
