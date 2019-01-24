@@ -186,6 +186,10 @@ class WKWebView(ui.View):
 
   # Global webview index for console
   webviews = []
+  console_view = UIApplication.sharedApplication().\
+    keyWindow().rootViewController().\
+    accessoryViewController().\
+    consoleViewController()
 
   def __init__(self, swipe_navigation=False, data_detectors=NONE, log_js_evals=False, respect_safe_areas=False, **kwargs):
     
@@ -473,6 +477,7 @@ class WKWebView(ui.View):
     console.set_color(*ui.parse_color(theme.tint)[:3])
     while True:
       value = input('js> ').strip()
+      self.console_view.history().insertObject_atIndex_(ns(value+'\n'),0)
       if value == 'quit':
         break
       if value == 'list':
@@ -723,10 +728,12 @@ if __name__ == '__main__':
   
   v = MyWebView(name='DemoWKWebView', delegate=MyWebViewDelegate(), swipe_navigation=True, data_detectors=(WKWebView.PHONE_NUMBER,WKWebView.LINK), frame=r.bounds, flex='WH')
   r.add_subview(v)
-  
-  v2 = WKWebView(name='HiddenView')
 
-  r.present('panel')
+  r.present() # Use 'panel' if you want to view console in another tab
+  
+  
+  
+  
   
   #v.disable_all()
   v.load_html(html)
