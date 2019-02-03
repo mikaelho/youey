@@ -354,10 +354,11 @@ class WKWebView(ui.View):
       
   @property
   def user_agent(self):
-    return self._get_user_agent()
+    "Must be called outside main thread"
+    return self.eval_js('navigator.userAgent')
       
   @on_main_thread
-  def _get_user_agent(self):
+  def _get_user_agent2(self):
     return str(self.webview.customUserAgent())
       
   @user_agent.setter
