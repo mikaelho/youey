@@ -1,3 +1,4 @@
+#coding: utf-8
 '''
 # WKWebView - modern webview for Pythonista
 
@@ -351,6 +352,23 @@ class WKWebView(ui.View):
     self.disable_user_selection()
     self.disable_font_resizing()
       
+  @property
+  def user_agent(self):
+    return self._get_user_agent()
+      
+  @on_main_thread
+  def _get_user_agent(self):
+    return str(self.webview.customUserAgent())
+      
+  @user_agent.setter
+  def user_agent(self, value):
+    value = str(value)
+    self._set_user_agent(value)
+      
+  @on_main_thread
+  def _set_user_agent(self, value):
+    self.webview.setCustomUserAgent_(value)
+      
   @on_main_thread
   def go_back(self):
     self.webview.goBack()
@@ -673,7 +691,7 @@ class WKWebView(ui.View):
 
 
 if __name__ == '__main__':
-  
+
   class MyWebViewDelegate:
     
     def webview_should_start_load(self, webview, url, nav_type):
@@ -730,10 +748,6 @@ if __name__ == '__main__':
   r.add_subview(v)
 
   r.present() # Use 'panel' if you want to view console in another tab
-  
-  
-  
-  
   
   #v.disable_all()
   v.load_html(html)
